@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1280">
+    <title>Quizmaster — Pub Quiz</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header id="app-header">
+            <div class="logo-block">
+                <div class="logo-glyph"></div>
+                <h1 class="logo-text">QUIZMASTER<span class="logo-sub">// pub quiz console</span></h1>
+            </div>
+            <nav id="main-nav">
+                <button class="nav-btn" data-screen="setup">SETUP</button>
+                <button class="nav-btn" data-screen="main">SPIEL</button>
+                <button class="nav-btn danger" id="reset-btn">RESET</button>
+            </nav>
+        </header>
+
+        <!-- Screens -->
+        <main id="screen-container">
+            <section id="screen-setup" class="screen"></section>
+            <section id="screen-main" class="screen hidden"></section>
+            <section id="screen-question" class="screen hidden"></section>
+        </main>
+
+        <footer id="app-footer">
+            <span class="footer-coord">// COORD 47.21°N · 8.54°E</span>
+            <span class="footer-status" id="footer-status">SYSTEM BEREIT</span>
+            <span class="footer-coord">// LOCAL STORAGE ACTIVE</span>
+        </footer>
+    </div>
+
+    <!-- Templates -->
+    <template id="tpl-setup">
+        <div class="setup-grid">
+            <div class="panel" id="panel-avatars">
+                <h2 class="panel-title">// AVATAR-POOL</h2>
+                <p class="panel-hint">Lade ~15 Bilder hoch. Teams wählen daraus ihren Avatar.</p>
+                <div class="upload-zone" id="avatar-upload">
+                    <input type="file" id="avatar-file-input" multiple accept="image/*" hidden>
+                    <span class="upload-icon">+</span>
+                    <span>Bilder hierher ziehen oder klicken</span>
+                </div>
+                <div class="avatar-pool" id="avatar-pool"></div>
+            </div>
+
+            <div class="panel" id="panel-teams">
+                <h2 class="panel-title">// TEAMS</h2>
+                <p class="panel-hint">4–6 Teams. Klicke einen Avatar im Pool, um ihn zuzuweisen.</p>
+                <div class="teams-list" id="teams-list"></div>
+                <button class="btn btn-secondary" id="add-team-btn">+ Team hinzufügen</button>
+            </div>
+
+            <div class="panel panel-wide" id="panel-categories">
+                <h2 class="panel-title">// KATEGORIEN &amp; FRAGEN</h2>
+                <div class="categories-list" id="categories-list"></div>
+                <button class="btn btn-secondary" id="add-category-btn">+ Kategorie hinzufügen</button>
+            </div>
+
+            <div class="panel panel-wide" id="panel-actions">
+                <button class="btn btn-primary big" id="start-game-btn">SPIEL STARTEN ▸</button>
+                <span class="status-line" id="setup-status"></span>
+            </div>
+        </div>
+    </template>
+
+    <template id="tpl-main"></template>
+    <template id="tpl-question"></template>
+
+    <!-- Modal Container -->
+    <div id="modal-root" class="modal-root hidden"></div>
+
+    <!-- JS Modules -->
+    <script src="js/GameState.js"></script>
+    <script src="js/SetupManager.js"></script>
+    <script src="js/QuestionRenderer.js"></script>
+    <script src="js/UIController.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
