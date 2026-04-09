@@ -37,9 +37,7 @@ const UIController = (function () {
 
         switch (name) {
             case 'setup':    SetupManager.init(screens.setup); break;
-            case 'main':     if (typeof MainBoard !== 'undefined') MainBoard.init(screens.main);
-                             else screens.main.innerHTML = '<p style="color:var(--text-dim);padding:40px;">// HAUPTSEITE — Modus 2 wird in Schritt 2 implementiert.</p>';
-                             break;
+            case 'main':     MainBoard.init(screens.main); break;
             case 'question': QuestionRenderer.init(screens.question); break;
         }
 
