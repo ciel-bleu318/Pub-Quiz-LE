@@ -13,6 +13,9 @@ const GameState = (function () {
         currentScreen: 'setup',
         currentQuestionRef: null, // { categoryId, questionId }
         gameStarted: false,
+        settings: {
+            showProgress: true,   // toggleable progress bar on main board
+        },
     });
 
     let state = load();
@@ -22,11 +25,19 @@ const GameState = (function () {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return defaultState();
             const parsed = JSON.parse(raw);
-            return Object.assign(defaultState(), parsed);
+            const merged = Object.assign(defaultState(), parsed);
+            // Ensure nested settings object exists with all defaults
+            merged.settings = Object.assign(defaultState().settings, parsed.settings || {});
+            return merged;
         } catch (e) {
             console.warn('GameState: failed to load, resetting.', e);
             return defaultState();
         }
+    }
+
+    function updateSettings(patch) {
+        state.settings = Object.assign({}, state.settings, patch);
+        save();
     }
 
     function save() {
@@ -182,6 +193,6 @@ const GameState = (function () {
         addQuestion, updateQuestion, removeQuestion,
         markQuestionPlayed, pickRandomUnplayed,
         setScreen, setCurrentQuestionRef, startGame,
-        validateForStart,
+        validateForStart, updateSettings,
     };
 })();

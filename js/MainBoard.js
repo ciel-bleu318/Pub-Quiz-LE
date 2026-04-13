@@ -129,25 +129,27 @@ const MainBoard = (function () {
 
         side.appendChild(list);
 
-        // Footer status
-        const totalRemaining = state.categories.reduce(
-            (sum, c) => sum + c.questions.filter(q => !q.played).length, 0
-        );
-        const totalQuestions = state.categories.reduce((sum, c) => sum + c.questions.length, 0);
-        const played = totalQuestions - totalRemaining;
+        // Footer status (optional)
+        if (state.settings && state.settings.showProgress !== false) {
+            const totalRemaining = state.categories.reduce(
+                (sum, c) => sum + c.questions.filter(q => !q.played).length, 0
+            );
+            const totalQuestions = state.categories.reduce((sum, c) => sum + c.questions.length, 0);
+            const played = totalQuestions - totalRemaining;
 
-        const footer = document.createElement('div');
-        footer.className = 'score-footer';
-        footer.innerHTML = `
-            <div class="score-footer-line">
-                <span>FORTSCHRITT</span>
-                <span class="score-footer-num">${played} / ${totalQuestions}</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" style="width:${totalQuestions ? (played / totalQuestions * 100) : 0}%"></div>
-            </div>
-        `;
-        side.appendChild(footer);
+            const footer = document.createElement('div');
+            footer.className = 'score-footer';
+            footer.innerHTML = `
+                <div class="score-footer-line">
+                    <span>FORTSCHRITT</span>
+                    <span class="score-footer-num">${played} / ${totalQuestions}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width:${totalQuestions ? (played / totalQuestions * 100) : 0}%"></div>
+                </div>
+            `;
+            side.appendChild(footer);
+        }
 
         return side;
     }

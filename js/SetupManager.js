@@ -695,6 +695,14 @@ const SetupManager = (function () {
             GameState.startGame();
             UIController.showScreen('main');
         };
+
+        const progressToggle = root.querySelector('#progress-toggle');
+        if (progressToggle) {
+            progressToggle.checked = GameState.get().settings.showProgress !== false;
+            progressToggle.addEventListener('change', () => {
+                GameState.updateSettings({ showProgress: progressToggle.checked });
+            });
+        }
     }
 
     function updateStatus() {

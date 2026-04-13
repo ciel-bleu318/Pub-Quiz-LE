@@ -837,6 +837,51 @@ body::after {
 .status-line.error { color: var(--red); }
 .status-line.ok { color: var(--turquoise); }
 
+/* Toggle switch */
+.toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+.toggle input { display: none; }
+.toggle-track {
+    width: 40px;
+    height: 20px;
+    background: var(--bg-deep);
+    border: 1px solid var(--line-bright);
+    border-radius: 12px;
+    position: relative;
+    transition: all 0.2s ease;
+}
+.toggle-dot {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    transition: all 0.2s ease;
+}
+.toggle input:checked + .toggle-track {
+    border-color: var(--turquoise);
+    box-shadow: var(--glow-turquoise);
+}
+.toggle input:checked + .toggle-track .toggle-dot {
+    left: 22px;
+    background: var(--turquoise);
+    box-shadow: var(--glow-turquoise);
+}
+.toggle-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    font-weight: 600;
+}
+.toggle input:checked ~ .toggle-label {
+    color: var(--turquoise);
+}
+
 /* ============================================================
    MODUS 2 — MAIN BOARD
    ============================================================ */
