@@ -1644,3 +1644,164 @@ body::after {
     opacity: 0.4;
     cursor: not-allowed;
 }
+
+/* ============================================================
+   PHASE 2 — CATEGORY TYPE + ROUND MODE + POINTS MATRIX
+   (functional styling; final polish in the redesign phase)
+   ============================================================ */
+
+/* Category type selector (setup) */
+.cat-type-select {
+    background: var(--bg-deep);
+    border: 1px solid var(--line-bright);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+}
+.cat-type-select:disabled { opacity: 0.55; cursor: not-allowed; }
+.cat-type-select:focus { border-color: var(--turquoise); box-shadow: var(--glow-turquoise); }
+
+/* Round badge in question topbar */
+.q-round-badge {
+    font-family: var(--font-display);
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 8px 14px;
+    border-radius: 3px;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    box-shadow: var(--glow-gold);
+}
+
+.q-body { display: flex; flex-direction: column; gap: 24px; }
+
+/* Round stage — stacked question items */
+.round-stage {
+    flex-direction: column;
+    gap: 18px;
+    align-items: stretch;
+    padding: 28px;
+}
+.round-item {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 22px 24px;
+    background: var(--bg-panel-2);
+    position: relative;
+}
+.round-item-label {
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    margin-bottom: 14px;
+}
+.round-prompt {
+    font-size: 26px;
+    line-height: 1.4;
+    text-align: left;
+}
+
+/* Combined answers */
+.round-answers {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+.round-answer-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border: 1.5px solid var(--turquoise);
+    border-radius: 6px;
+    background: linear-gradient(135deg, rgba(79,240,212,0.08), rgba(181,108,255,0.06));
+    box-shadow: var(--glow-turquoise);
+}
+.round-answer-num {
+    font-family: var(--font-display);
+    font-size: 14px;
+    color: var(--gold);
+    min-width: 34px;
+}
+.round-answer-text { font-size: 20px; color: var(--text); }
+
+/* Points matrix */
+.points-matrix {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 4px 0;
+    overflow-x: auto;
+}
+.matrix-row {
+    display: grid;
+    grid-template-columns: minmax(160px, 1.4fr) repeat(var(--matrix-cols, 3), 60px) 56px;
+    gap: 8px;
+    align-items: center;
+}
+.matrix-head {
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+}
+.matrix-team-head, .matrix-col-head, .matrix-total-head {
+    font-family: var(--font-display);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    text-align: center;
+}
+.matrix-team-head { text-align: left; }
+.matrix-team {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px;
+}
+.matrix-avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 1.5px solid var(--line-bright);
+    background-size: cover;
+    background-position: center;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-faint);
+    flex-shrink: 0;
+}
+.matrix-name {
+    font-size: 14px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.matrix-cell {
+    height: 44px;
+    border: 1.5px solid var(--line-bright);
+    border-radius: 6px;
+    background: var(--bg-deep);
+    color: var(--turquoise);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.matrix-cell:hover { border-color: var(--turquoise); }
+.matrix-cell.on {
+    background: rgba(79,240,212,0.12);
+    border-color: var(--turquoise);
+    box-shadow: var(--glow-turquoise);
+}
+.matrix-total {
+    font-family: var(--font-display);
+    font-size: 16px;
+    color: var(--gold);
+    text-align: center;
+}

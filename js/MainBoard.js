@@ -64,7 +64,6 @@ const MainBoard = (function () {
 
     function buildCategoryTile(cat, idx) {
         const remaining = cat.questions.filter(q => !q.played).length;
-        const total = cat.questions.length;
         const exhausted = remaining === 0;
         const palette = TILE_PALETTE[idx % TILE_PALETTE.length];
 
@@ -74,20 +73,31 @@ const MainBoard = (function () {
         tile.style.setProperty('--tile-glow', palette.glow);
         tile.style.setProperty('--tile-tint', palette.tint);
 
+        // Public board: no remaining-count shown, only greyed out when done.
         tile.innerHTML = `
             <div class="tile-corner tl"></div>
             <div class="tile-corner br"></div>
             <div class="tile-icon">${escapeHtml(cat.icon || '★')}</div>
             <div class="tile-name">${escapeHtml(cat.name)}</div>
-            <div class="tile-meta">${remaining} / ${total} OFFEN</div>
             ${exhausted ? '<div class="tile-lock">// ERLEDIGT</div>' : ''}
         `;
 
         if (!exhausted) {
             tile.addEventListener('click', () => {
-                const q = GameState.pickRandomUnplayed(cat.id);
-                if (!q) { render(); return; }
-                GameState.setCurrentQuestionRef({ categoryId: cat.id, questionId: q.id });
+                let questionIds;
+                let mode;
+                if (GameState.isRoundType(cat.type)) {
+                    const qs = GameState.pickRoundQuestions(cat.id, GameState.ROUND_SIZE);
+                    if (!qs.length) { render(); return; }
+                    questionIds = qs.map(q => q.id);
+                    mode = 'round';
+                } else {
+                    const q = GameState.pickRandomUnplayed(cat.id);
+                    if (!q) { render(); return; }
+                    questionIds = [q.id];
+                    mode = 'single';
+                }
+                GameState.setCurrentPlay({ categoryId: cat.id, questionIds, mode });
                 UIController.showScreen('question');
             });
         } else {

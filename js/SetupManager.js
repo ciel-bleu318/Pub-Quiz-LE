@@ -6,6 +6,13 @@ const SetupManager = (function () {
     let root;
     let selectedAvatarTarget = null; // teamId currently waiting for an avatar pick
 
+    const TYPE_LABELS = {
+        standard: 'STANDARD',
+        song:     'RATE DEN SONG',
+        whereami: 'WO BIN ICH?',
+        barcode:  'MOVIE BARCODE',
+    };
+
     // A media "slot" value is { mediaId } (already cached) or { blob } (pending upload).
     // persistSlot writes a pending blob to the cache and returns its id.
     async function persistSlot(val) {
@@ -198,9 +205,31 @@ const SetupManager = (function () {
                 updateStatus();
             });
 
+            // Type selector — locked once the category has questions, so its
+            // type can't diverge from the questions already added.
+            const typeSelect = document.createElement('select');
+            typeSelect.className = 'cat-type-select';
+            Object.entries(TYPE_LABELS).forEach(([value, label]) => {
+                const opt = document.createElement('option');
+                opt.value = value;
+                opt.textContent = label + (GameState.isRoundType(value) ? '  · RUNDE (3er)' : '  · EINZELFRAGE');
+                if (cat.type === value) opt.selected = true;
+                typeSelect.appendChild(opt);
+            });
+            typeSelect.disabled = cat.questions.length > 0;
+            typeSelect.title = cat.questions.length > 0
+                ? 'Typ ist gesperrt, solange Fragen vorhanden sind'
+                : 'Fragetyp dieser Kategorie';
+            typeSelect.addEventListener('change', () => {
+                GameState.updateCategory(cat.id, { type: typeSelect.value });
+                renderCategories();
+                updateStatus();
+            });
+
+            const min = GameState.minQuestions(cat.type);
             const meta = document.createElement('span');
-            meta.className = 'cat-meta ' + (cat.questions.length >= 10 ? 'ok' : 'warn');
-            meta.textContent = `${cat.questions.length} / 10 FRAGEN`;
+            meta.className = 'cat-meta ' + (cat.questions.length >= min ? 'ok' : 'warn');
+            meta.textContent = `${cat.questions.length} / ${min} FRAGEN`;
 
             const rm = document.createElement('button');
             rm.className = 'cat-remove';
@@ -208,6 +237,7 @@ const SetupManager = (function () {
             rm.addEventListener('click', () => {
                 if (confirm(`Kategorie "${cat.name}" wirklich löschen?`)) {
                     GameState.removeCategory(cat.id);
+                    MediaCache.pruneExcept(GameState.collectMediaIds());
                     renderCategories();
                     updateStatus();
                 }
@@ -215,6 +245,7 @@ const SetupManager = (function () {
 
             head.appendChild(iconInput);
             head.appendChild(nameInput);
+            head.appendChild(typeSelect);
             head.appendChild(meta);
             head.appendChild(rm);
             card.appendChild(head);
@@ -227,21 +258,14 @@ const SetupManager = (function () {
             });
             card.appendChild(ql);
 
-            // Add buttons
+            // Single add button matching the category's fixed type
             const bar = document.createElement('div');
             bar.className = 'add-question-bar';
-            [
-                ['standard', '+ STANDARD'],
-                ['whereami', '+ WO BIN ICH?'],
-                ['barcode',  '+ MOVIE BARCODE'],
-                ['song',     '+ RATE DEN SONG'],
-            ].forEach(([type, label]) => {
-                const b = document.createElement('button');
-                b.className = 'btn btn-secondary';
-                b.textContent = label;
-                b.addEventListener('click', () => openQuestionModal(cat.id, type, null));
-                bar.appendChild(b);
-            });
+            const addBtn = document.createElement('button');
+            addBtn.className = 'btn btn-secondary';
+            addBtn.textContent = '+ ' + TYPE_LABELS[cat.type] + ' HINZUFÜGEN';
+            addBtn.addEventListener('click', () => openQuestionModal(cat.id, cat.type, null));
+            bar.appendChild(addBtn);
             card.appendChild(bar);
 
             list.appendChild(card);

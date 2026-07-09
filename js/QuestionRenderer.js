@@ -1,44 +1,68 @@
 /* ============================================================
    QuestionRenderer — Modus 3: Frageseite
-   Renders standard / whereami / barcode / song question types,
-   handles reveal flow + scoring.
+
+   Two play modes:
+   - single : one question (whereami / barcode, and any type when only
+              one is drawn). Sequential media reveal, answer reveal,
+              single-award scoring.
+   - round  : 3 questions at once (standard / song). Teams answer all
+              three on paper, no reveal in between; combined reveal at the
+              end, then a Team × Frage points matrix.
    ============================================================ */
 
 const QuestionRenderer = (function () {
     let root;
-    let currentQuestion = null;
-    let currentCategory = null;
+    let category = null;
+    let questions = [];       // 1 (single) or up to 3 (round)
+    let mode = 'single';
 
-    // Per-type runtime state
-    let revealedStep = 0;     // whereami: 0..2 images revealed
-    let selectedOption = -1;  // barcode
+    // Shared reveal state
     let answerRevealed = false;
+
+    // Single-mode per-type state
+    let revealedStep = 0;     // whereami: which image index is current
+    let selectedOption = -1;  // barcode selected choice
     let selectedTeams = new Set();
 
-    // Audio/YT runtime
+    // Round-mode state
+    let roundRevealed = 1;    // how many of the round's questions are shown
+    let roundScores = {};     // { [questionId]: Set(teamId) }
+
+    // Audio / YT runtime (shared; only one plays at a time)
     let audioEl = null;
     let ytPlayer = null;
     let ytStopTimer = null;
+    let songResetFn = null;   // resets the currently-active song player's UI
 
+    /* ============================================================
+       INIT / TOP-LEVEL RENDER
+       ============================================================ */
     function init(rootEl) {
         root = rootEl;
-        const ref = GameState.get().currentQuestionRef;
-        if (!ref) {
+        const play = GameState.get().currentPlay;
+        if (!play) {
             root.innerHTML = '<p style="color:var(--text-dim); padding:40px;">// KEINE FRAGE GEWÄHLT — zurück zum Spiel.</p>';
             return;
         }
         const state = GameState.get();
-        currentCategory = state.categories.find(c => c.id === ref.categoryId);
-        currentQuestion = currentCategory?.questions.find(q => q.id === ref.questionId);
-        if (!currentQuestion) {
+        category = state.categories.find(c => c.id === play.categoryId);
+        questions = (play.questionIds || [])
+            .map(id => category?.questions.find(q => q.id === id))
+            .filter(Boolean);
+        if (!category || questions.length === 0) {
             root.innerHTML = '<p style="color:var(--text-dim); padding:40px;">// FRAGE NICHT GEFUNDEN.</p>';
             return;
         }
+        mode = play.mode || (questions.length > 1 ? 'round' : 'single');
+
         // Reset runtime
+        answerRevealed = false;
         revealedStep = 0;
         selectedOption = -1;
-        answerRevealed = false;
         selectedTeams = new Set();
+        roundRevealed = 1;
+        roundScores = {};
+        questions.forEach(q => { roundScores[q.id] = new Set(); });
         stopAllMedia();
 
         render();
@@ -46,84 +70,357 @@ const QuestionRenderer = (function () {
 
     function render() {
         root.innerHTML = '';
-
         const wrap = document.createElement('div');
         wrap.className = 'q-wrap';
 
         // Top bar
         const topBar = document.createElement('div');
         topBar.className = 'q-topbar';
+        const roundBadge = (mode === 'round')
+            ? `<div class="q-round-badge">RUNDE · ${questions.length} FRAGEN</div>` : '';
         topBar.innerHTML = `
             <button class="btn btn-secondary" id="q-back">◂ ZURÜCK</button>
             <div class="q-cat-badge">
-                <span class="q-cat-icon">${escapeHtml(currentCategory.icon || '★')}</span>
-                <span class="q-cat-name">${escapeHtml(currentCategory.name)}</span>
+                <span class="q-cat-icon">${escapeHtml(category.icon || '★')}</span>
+                <span class="q-cat-name">${escapeHtml(category.name)}</span>
             </div>
-            <div class="q-type-tag qt-${currentQuestion.type}">${typeLabel(currentQuestion.type)}</div>
+            <div class="q-type-tag qt-${category.type}">${typeLabel(category.type)}</div>
+            ${roundBadge}
         `;
         wrap.appendChild(topBar);
 
-        // Stage (media / question)
-        const stage = document.createElement('div');
-        stage.className = 'q-stage';
-        wrap.appendChild(stage);
-
-        switch (currentQuestion.type) {
-            case 'standard': renderStandard(stage); break;
-            case 'whereami': renderWhereAmI(stage); break;
-            case 'barcode':  renderBarcode(stage); break;
-            case 'song':     renderSong(stage); break;
-        }
-
-        // Answer area
-        const answerArea = document.createElement('div');
-        answerArea.className = 'q-answer-area';
-        answerArea.id = 'q-answer-area';
-        wrap.appendChild(answerArea);
-        renderAnswerArea();
-
-        // Scoring area (hidden until answer revealed)
-        const scoringArea = document.createElement('div');
-        scoringArea.className = 'q-scoring';
-        scoringArea.id = 'q-scoring';
-        wrap.appendChild(scoringArea);
-        renderScoringArea();
-
+        // Body (mode-specific). Attach the tree to the DOM *before* rendering
+        // bodies — the per-type renderers query via root.querySelector during
+        // build (e.g. #bc-choices, #wa-stage), which requires it to be attached.
+        const body = document.createElement('div');
+        body.className = 'q-body';
+        wrap.appendChild(body);
         root.appendChild(wrap);
 
-        // Bind back button
+        if (mode === 'round') renderRoundBody(body);
+        else renderSingleBody(body);
+
         document.getElementById('q-back').addEventListener('click', () => {
             stopAllMedia();
             UIController.showScreen('main');
         });
     }
 
-    /* ---------- STANDARD ---------- */
-    function renderStandard(stage) {
-        stage.innerHTML = `
-            <div class="q-standard">
-                <div class="q-prompt">${escapeHtml(currentQuestion.question)}</div>
-            </div>
-        `;
+    /* ============================================================
+       SINGLE MODE
+       ============================================================ */
+    function renderSingleBody(body) {
+        const q = questions[0];
+
+        const stage = document.createElement('div');
+        stage.className = 'q-stage';
+        body.appendChild(stage);
+        switch (q.type) {
+            case 'standard': stage.appendChild(buildStandardStage(q)); break;
+            case 'whereami': renderWhereAmI(stage, q); break;
+            case 'barcode':  renderBarcode(stage, q); break;
+            case 'song':     stage.appendChild(buildSongPlayer(q)); break;
+        }
+
+        const answerArea = document.createElement('div');
+        answerArea.className = 'q-answer-area';
+        body.appendChild(answerArea);
+
+        const scoringArea = document.createElement('div');
+        scoringArea.className = 'q-scoring';
+        body.appendChild(scoringArea);
+
+        renderSingleAnswer(answerArea, scoringArea, q);
     }
 
-    /* ---------- WHERE AM I ---------- */
-    function renderWhereAmI(stage) {
-        const imgs = currentQuestion.images || [];
-        const hints = currentQuestion.hints || [];
+    function renderSingleAnswer(answerArea, scoringArea, q) {
+        answerArea.innerHTML = '';
+        if (!answerRevealed) {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-primary big';
+            btn.textContent = '★ ANTWORT AUFDECKEN';
+            btn.onclick = () => {
+                answerRevealed = true;
+                stopAllMedia();
+                if (q.type === 'barcode') {
+                    root.querySelectorAll('.barcode-choice').forEach((b, idx) => {
+                        b.classList.toggle('correct', idx === q.correctIndex);
+                        if (selectedOption === idx && idx !== q.correctIndex) b.classList.add('wrong');
+                    });
+                }
+                if (q.type === 'whereami') {
+                    revealedStep = (q.images || []).length - 1;
+                    refreshWhereAmI(q);
+                }
+                renderSingleAnswer(answerArea, scoringArea, q);
+            };
+            answerArea.appendChild(btn);
+        } else {
+            answerArea.appendChild(buildAnswerReveal(q.answer));
+            renderSingleScoring(scoringArea);
+        }
+    }
 
+    function renderSingleScoring(area) {
+        area.innerHTML = '';
+        const state = GameState.get();
+
+        const title = document.createElement('div');
+        title.className = 'scoring-title';
+        title.textContent = '// PUNKTE VERGEBEN — Teams anklicken (Mehrfachauswahl)';
+        area.appendChild(title);
+
+        const tilesWrap = document.createElement('div');
+        tilesWrap.className = 'scoring-tiles';
+        state.teams.forEach(team => {
+            const av = state.avatars.find(a => a.id === team.avatarId);
+            const tile = document.createElement('button');
+            tile.className = 'scoring-tile' + (selectedTeams.has(team.id) ? ' selected' : '');
+            tile.innerHTML = `
+                <div class="scoring-avatar">${av ? '' : '?'}</div>
+                <div class="scoring-name">${escapeHtml(team.name)}</div>
+                <div class="scoring-score">${team.score} PKT</div>
+                <div class="scoring-check">+1</div>
+            `;
+            if (av) MediaCache.applyBg(tile.querySelector('.scoring-avatar'), av.mediaId);
+            tile.onclick = () => {
+                if (selectedTeams.has(team.id)) selectedTeams.delete(team.id);
+                else selectedTeams.add(team.id);
+                renderSingleScoring(area);
+            };
+            tilesWrap.appendChild(tile);
+        });
+        area.appendChild(tilesWrap);
+
+        const actions = document.createElement('div');
+        actions.className = 'scoring-actions';
+        const skipBtn = document.createElement('button');
+        skipBtn.className = 'btn';
+        skipBtn.textContent = 'KEINE PUNKTE · ZURÜCK';
+        skipBtn.onclick = () => {
+            finishPlay();
+        };
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.textContent = `✓ ${selectedTeams.size} TEAM(S) · +1 PUNKT → ZURÜCK`;
+        confirmBtn.disabled = selectedTeams.size === 0;
+        confirmBtn.onclick = () => {
+            if (selectedTeams.size > 0) GameState.addPointsToTeams(Array.from(selectedTeams), 1);
+            finishPlay();
+        };
+        actions.appendChild(skipBtn);
+        actions.appendChild(confirmBtn);
+        area.appendChild(actions);
+    }
+
+    /* ============================================================
+       ROUND MODE
+       ============================================================ */
+    function renderRoundBody(body) {
+        body.innerHTML = '';
+
+        // Stage: revealed questions stacked
+        const stage = document.createElement('div');
+        stage.className = 'q-stage round-stage';
+        body.appendChild(stage);
+        for (let i = 0; i < roundRevealed && i < questions.length; i++) {
+            stage.appendChild(buildRoundItem(questions[i], i));
+        }
+
+        // Controls: reveal next question, or reveal all answers
+        const controls = document.createElement('div');
+        controls.className = 'q-answer-area';
+        body.appendChild(controls);
+
+        if (roundRevealed < questions.length) {
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'btn btn-secondary big';
+            nextBtn.textContent = `▸ NÄCHSTE FRAGE (${roundRevealed + 1}/${questions.length})`;
+            nextBtn.onclick = () => { roundRevealed++; renderRoundBody(body); };
+            controls.appendChild(nextBtn);
+        } else if (!answerRevealed) {
+            const revealBtn = document.createElement('button');
+            revealBtn.className = 'btn btn-primary big';
+            revealBtn.textContent = '★ ALLE ANTWORTEN AUFDECKEN';
+            revealBtn.onclick = () => {
+                answerRevealed = true;
+                stopAllMedia();
+                renderRoundBody(body);
+            };
+            controls.appendChild(revealBtn);
+        } else {
+            // Combined answers
+            const answersWrap = document.createElement('div');
+            answersWrap.className = 'round-answers';
+            questions.forEach((q, i) => {
+                const row = document.createElement('div');
+                row.className = 'round-answer-row';
+                row.innerHTML = `
+                    <span class="round-answer-num">F${i + 1}</span>
+                    <span class="round-answer-text">${escapeHtml(q.answer)}</span>
+                `;
+                answersWrap.appendChild(row);
+            });
+            controls.appendChild(answersWrap);
+        }
+
+        // Scoring matrix (once revealed)
+        const scoring = document.createElement('div');
+        scoring.className = 'q-scoring';
+        body.appendChild(scoring);
+        if (answerRevealed) renderRoundMatrix(scoring);
+    }
+
+    function buildRoundItem(q, idx) {
+        const item = document.createElement('div');
+        item.className = 'round-item';
+        const label = document.createElement('div');
+        label.className = 'round-item-label';
+        label.textContent = `FRAGE ${idx + 1}`;
+        item.appendChild(label);
+
+        if (q.type === 'song') {
+            item.appendChild(buildSongPlayer(q));
+        } else {
+            // standard (and any other prompt-based type)
+            const prompt = document.createElement('div');
+            prompt.className = 'q-prompt round-prompt';
+            prompt.textContent = q.question;
+            item.appendChild(prompt);
+        }
+        return item;
+    }
+
+    function renderRoundMatrix(area) {
+        area.innerHTML = '';
+        const state = GameState.get();
+
+        const title = document.createElement('div');
+        title.className = 'scoring-title';
+        title.textContent = '// PUNKTE-MATRIX — pro Frage die richtigen Teams abhaken';
+        area.appendChild(title);
+
+        const table = document.createElement('div');
+        table.className = 'points-matrix';
+        table.style.setProperty('--matrix-cols', questions.length);
+
+        // Header row
+        const head = document.createElement('div');
+        head.className = 'matrix-row matrix-head';
+        head.appendChild(cell('matrix-team-head', 'TEAM'));
+        questions.forEach((q, i) => head.appendChild(cell('matrix-col-head', `F${i + 1}`)));
+        head.appendChild(cell('matrix-total-head', 'Σ'));
+        table.appendChild(head);
+
+        // Team rows
+        state.teams.forEach(team => {
+            const av = state.avatars.find(a => a.id === team.avatarId);
+            const row = document.createElement('div');
+            row.className = 'matrix-row';
+
+            const teamCell = document.createElement('div');
+            teamCell.className = 'matrix-team';
+            teamCell.innerHTML = `
+                <div class="matrix-avatar">${av ? '' : '?'}</div>
+                <div class="matrix-name">${escapeHtml(team.name)}</div>
+            `;
+            if (av) MediaCache.applyBg(teamCell.querySelector('.matrix-avatar'), av.mediaId);
+            row.appendChild(teamCell);
+
+            const totalCell = document.createElement('div');
+            totalCell.className = 'matrix-total';
+
+            function refreshTotal() {
+                const n = questions.reduce((sum, q) => sum + (roundScores[q.id].has(team.id) ? 1 : 0), 0);
+                totalCell.textContent = '+' + n;
+            }
+
+            questions.forEach(q => {
+                const c = document.createElement('button');
+                c.className = 'matrix-cell';
+                const on = roundScores[q.id].has(team.id);
+                c.classList.toggle('on', on);
+                c.textContent = on ? '✓' : '';
+                c.onclick = () => {
+                    if (roundScores[q.id].has(team.id)) roundScores[q.id].delete(team.id);
+                    else roundScores[q.id].add(team.id);
+                    const nowOn = roundScores[q.id].has(team.id);
+                    c.classList.toggle('on', nowOn);
+                    c.textContent = nowOn ? '✓' : '';
+                    refreshTotal();
+                };
+                row.appendChild(c);
+            });
+
+            row.appendChild(totalCell);
+            refreshTotal();
+            table.appendChild(row);
+        });
+        area.appendChild(table);
+
+        // Actions
+        const actions = document.createElement('div');
+        actions.className = 'scoring-actions';
+        const skipBtn = document.createElement('button');
+        skipBtn.className = 'btn';
+        skipBtn.textContent = 'KEINE PUNKTE · ZURÜCK';
+        skipBtn.onclick = () => finishPlay();
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.textContent = 'PUNKTE VERGEBEN → ZURÜCK';
+        confirmBtn.onclick = () => {
+            questions.forEach(q => {
+                const ids = Array.from(roundScores[q.id]);
+                if (ids.length) GameState.addPointsToTeams(ids, 1);
+            });
+            finishPlay();
+        };
+        actions.appendChild(skipBtn);
+        actions.appendChild(confirmBtn);
+        area.appendChild(actions);
+    }
+
+    function cell(cls, text) {
+        const d = document.createElement('div');
+        d.className = cls;
+        d.textContent = text;
+        return d;
+    }
+
+    /* ============================================================
+       SHARED STAGE BUILDERS
+       ============================================================ */
+    function buildStandardStage(q) {
+        const el = document.createElement('div');
+        el.className = 'q-standard';
+        el.innerHTML = `<div class="q-prompt">${escapeHtml(q.question)}</div>`;
+        return el;
+    }
+
+    function buildAnswerReveal(answer) {
+        const reveal = document.createElement('div');
+        reveal.className = 'answer-reveal';
+        reveal.innerHTML = `
+            <span class="reveal-label">// AUFLÖSUNG</span>
+            <div class="reveal-text">${escapeHtml(answer)}</div>
+        `;
+        return reveal;
+    }
+
+    /* ---------- WHERE AM I (single only) ---------- */
+    function renderWhereAmI(stage, q) {
         stage.innerHTML = `
             <div class="q-whereami">
                 <div class="whereami-stage" id="wa-stage"></div>
                 <div class="whereami-controls" id="wa-controls"></div>
             </div>
         `;
-        refreshWhereAmI();
+        refreshWhereAmI(q);
     }
 
-    function refreshWhereAmI() {
-        const imgs = currentQuestion.images || [];
-        const hints = currentQuestion.hints || [];
+    function refreshWhereAmI(q) {
+        const imgs = q.images || [];
+        const hints = q.hints || [];
         const stageEl = root.querySelector('#wa-stage');
         const controlsEl = root.querySelector('#wa-controls');
 
@@ -145,14 +442,13 @@ const QuestionRenderer = (function () {
             const btn = document.createElement('button');
             btn.className = 'btn btn-secondary big';
             btn.textContent = `▸ BILD ${revealedStep + 2} AUFDECKEN`;
-            btn.onclick = () => { revealedStep++; refreshWhereAmI(); };
+            btn.onclick = () => { revealedStep++; refreshWhereAmI(q); };
             controlsEl.appendChild(btn);
         }
     }
 
-    /* ---------- MOVIE BARCODE ---------- */
-    function renderBarcode(stage) {
-        const q = currentQuestion;
+    /* ---------- MOVIE BARCODE (single only) ---------- */
+    function renderBarcode(stage, q) {
         stage.innerHTML = `
             <div class="q-barcode">
                 <div class="barcode-display">
@@ -184,36 +480,43 @@ const QuestionRenderer = (function () {
         });
     }
 
-    /* ---------- RATE DEN SONG ---------- */
-    function renderSong(stage) {
-        const q = currentQuestion;
-        stage.innerHTML = `
-            <div class="q-song">
-                <div class="song-visual">
-                    <div class="song-disc">
-                        <div class="song-disc-inner"></div>
-                        <div class="song-disc-hole"></div>
-                    </div>
-                    <div class="song-waves"><span></span><span></span><span></span><span></span><span></span></div>
+    /* ---------- RATE DEN SONG (reusable player) ---------- */
+    function buildSongPlayer(q) {
+        const el = document.createElement('div');
+        el.className = 'q-song';
+        el.innerHTML = `
+            <div class="song-visual">
+                <div class="song-disc">
+                    <div class="song-disc-inner"></div>
+                    <div class="song-disc-hole"></div>
                 </div>
-                <div class="song-controls" id="song-controls"></div>
-                <div id="yt-container" class="yt-hidden"></div>
-                <div class="song-status" id="song-status">BEREIT · AUTO-STOP NACH ${q.stopAfter}s</div>
+                <div class="song-waves"><span></span><span></span><span></span><span></span><span></span></div>
             </div>
+            <div class="song-controls"></div>
+            <div class="yt-host yt-hidden"></div>
+            <div class="song-status">BEREIT · AUTO-STOP NACH ${q.stopAfter}s</div>
         `;
-        const controls = root.querySelector('#song-controls');
+        const els = {
+            playBtn: null,
+            statusEl: el.querySelector('.song-status'),
+            visual: el.querySelector('.song-visual'),
+            ytHost: el.querySelector('.yt-host'),
+        };
         const playBtn = document.createElement('button');
         playBtn.className = 'btn btn-primary big';
         playBtn.textContent = '▶ PLAY';
-        playBtn.onclick = () => startSong(playBtn);
-        controls.appendChild(playBtn);
+        els.playBtn = playBtn;
+        playBtn.onclick = () => playSong(q, els);
+        el.querySelector('.song-controls').appendChild(playBtn);
+        return el;
     }
 
-    function startSong(playBtn) {
-        const q = currentQuestion;
-        const statusEl = root.querySelector('#song-status');
-        const visual = root.querySelector('.song-visual');
+    function playSong(q, els) {
+        // Reset any previously-active player and stop its media first.
+        if (songResetFn) songResetFn();
+        stopAllMedia();
 
+        const { playBtn, statusEl, visual, ytHost } = els;
         playBtn.disabled = true;
         playBtn.textContent = '■ LÄUFT';
         visual.classList.add('playing');
@@ -229,60 +532,45 @@ const QuestionRenderer = (function () {
 
         const finish = () => {
             clearInterval(tick);
-            statusEl.textContent = 'GESTOPPT · ANTWORT AUFDECKEN';
+            statusEl.textContent = 'GESTOPPT';
             visual.classList.remove('playing');
             playBtn.disabled = false;
             playBtn.textContent = '↻ ERNEUT';
-            playBtn.onclick = () => startSong(playBtn);
+            playBtn.onclick = () => playSong(q, els);
         };
+        songResetFn = finish;
 
         if (q.audioMediaId) {
-            stopAllMedia();
             MediaCache.resolve(q.audioMediaId).then(url => {
-                if (!url) { statusEl.textContent = 'AUDIO NICHT GEFUNDEN'; playBtn.disabled = false; return; }
+                if (!url) { statusEl.textContent = 'AUDIO NICHT GEFUNDEN'; playBtn.disabled = false; clearInterval(tick); return; }
                 audioEl = new Audio(url);
-                audioEl.play().catch(err => {
-                    statusEl.textContent = 'AUDIO-FEHLER: ' + err.message;
-                });
+                audioEl.play().catch(err => { statusEl.textContent = 'AUDIO-FEHLER: ' + err.message; });
                 ytStopTimer = setTimeout(() => {
                     if (audioEl) { audioEl.pause(); audioEl = null; }
                     finish();
-                }, q.stopAfter * 1000);
+                }, total * 1000);
             });
         } else if (q.youtubeUrl) {
             const videoId = extractYouTubeId(q.youtubeUrl);
-            if (!videoId) {
-                statusEl.textContent = 'UNGÜLTIGER YOUTUBE-LINK';
-                playBtn.disabled = false;
-                return;
-            }
+            if (!videoId) { statusEl.textContent = 'UNGÜLTIGER YOUTUBE-LINK'; playBtn.disabled = false; clearInterval(tick); return; }
             loadYouTubeAPI().then(() => {
-                stopAllMedia();
-                const container = root.querySelector('#yt-container');
-                container.innerHTML = '<div id="yt-player"></div>';
-                ytPlayer = new YT.Player('yt-player', {
-                    height: '1',
-                    width: '1',
-                    videoId,
+                ytHost.innerHTML = '<div></div>';
+                ytPlayer = new YT.Player(ytHost.firstChild, {
+                    height: '1', width: '1', videoId,
                     playerVars: { autoplay: 1, controls: 0 },
-                    events: {
-                        onReady: (e) => e.target.playVideo(),
-                    }
+                    events: { onReady: (e) => e.target.playVideo() }
                 });
                 ytStopTimer = setTimeout(() => {
                     if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
                     finish();
-                }, q.stopAfter * 1000);
-            }).catch(err => {
-                statusEl.textContent = 'YOUTUBE-FEHLER: ' + err.message;
-                playBtn.disabled = false;
-            });
+                }, total * 1000);
+            }).catch(err => { statusEl.textContent = 'YOUTUBE-FEHLER: ' + err.message; playBtn.disabled = false; clearInterval(tick); });
         }
     }
 
     function stopAllMedia() {
-        if (audioEl) { try { audioEl.pause(); } catch(e){} audioEl = null; }
-        if (ytPlayer && ytPlayer.stopVideo) { try { ytPlayer.stopVideo(); } catch(e){} }
+        if (audioEl) { try { audioEl.pause(); } catch (e) {} audioEl = null; }
+        if (ytPlayer && ytPlayer.stopVideo) { try { ytPlayer.stopVideo(); } catch (e) {} }
         ytPlayer = null;
         if (ytStopTimer) { clearTimeout(ytStopTimer); ytStopTimer = null; }
     }
@@ -310,109 +598,14 @@ const QuestionRenderer = (function () {
         return ytApiPromise;
     }
 
-    /* ---------- ANSWER AREA ---------- */
-    function renderAnswerArea() {
-        const area = root.querySelector('#q-answer-area');
-        area.innerHTML = '';
-
-        if (!answerRevealed) {
-            const btn = document.createElement('button');
-            btn.className = 'btn btn-primary big';
-            btn.textContent = '★ ANTWORT AUFDECKEN';
-            btn.onclick = () => {
-                answerRevealed = true;
-                stopAllMedia();
-                // For barcode, re-mark correct/wrong
-                if (currentQuestion.type === 'barcode') {
-                    root.querySelectorAll('.barcode-choice').forEach((b, idx) => {
-                        b.classList.toggle('correct', idx === currentQuestion.correctIndex);
-                        if (selectedOption === idx && idx !== currentQuestion.correctIndex) {
-                            b.classList.add('wrong');
-                        }
-                    });
-                }
-                // For whereami, reveal all remaining images
-                if (currentQuestion.type === 'whereami') {
-                    revealedStep = (currentQuestion.images || []).length - 1;
-                    refreshWhereAmI();
-                }
-                renderAnswerArea();
-                renderScoringArea();
-            };
-            area.appendChild(btn);
-        } else {
-            const reveal = document.createElement('div');
-            reveal.className = 'answer-reveal';
-            reveal.innerHTML = `
-                <span class="reveal-label">// AUFLÖSUNG</span>
-                <div class="reveal-text">${escapeHtml(currentQuestion.answer)}</div>
-            `;
-            area.appendChild(reveal);
-        }
-    }
-
-    /* ---------- SCORING ---------- */
-    function renderScoringArea() {
-        const area = root.querySelector('#q-scoring');
-        area.innerHTML = '';
-        if (!answerRevealed) return;
-
-        const state = GameState.get();
-
-        const title = document.createElement('div');
-        title.className = 'scoring-title';
-        title.textContent = '// PUNKTE VERGEBEN — Teams anklicken (Mehrfachauswahl)';
-        area.appendChild(title);
-
-        const tilesWrap = document.createElement('div');
-        tilesWrap.className = 'scoring-tiles';
-
-        state.teams.forEach(team => {
-            const av = state.avatars.find(a => a.id === team.avatarId);
-            const tile = document.createElement('button');
-            tile.className = 'scoring-tile' + (selectedTeams.has(team.id) ? ' selected' : '');
-            tile.innerHTML = `
-                <div class="scoring-avatar">${av ? '' : '?'}</div>
-                <div class="scoring-name">${escapeHtml(team.name)}</div>
-                <div class="scoring-score">${team.score} PKT</div>
-                <div class="scoring-check">+1</div>
-            `;
-            if (av) MediaCache.applyBg(tile.querySelector('.scoring-avatar'), av.mediaId);
-            tile.onclick = () => {
-                if (selectedTeams.has(team.id)) selectedTeams.delete(team.id);
-                else selectedTeams.add(team.id);
-                renderScoringArea();
-            };
-            tilesWrap.appendChild(tile);
-        });
-        area.appendChild(tilesWrap);
-
-        const actions = document.createElement('div');
-        actions.className = 'scoring-actions';
-
-        const skipBtn = document.createElement('button');
-        skipBtn.className = 'btn';
-        skipBtn.textContent = 'KEINE PUNKTE · ZURÜCK';
-        skipBtn.onclick = () => finish(false);
-
-        const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'btn btn-primary';
-        confirmBtn.textContent = `✓ ${selectedTeams.size} TEAM(S) · +1 PUNKT → ZURÜCK`;
-        confirmBtn.disabled = selectedTeams.size === 0;
-        confirmBtn.onclick = () => finish(true);
-
-        actions.appendChild(skipBtn);
-        actions.appendChild(confirmBtn);
-        area.appendChild(actions);
-    }
-
-    function finish(awardPoints) {
-        if (awardPoints && selectedTeams.size > 0) {
-            GameState.addPointsToTeams(Array.from(selectedTeams), 1);
-        }
-        GameState.markQuestionPlayed(currentCategory.id, currentQuestion.id);
-        GameState.setCurrentQuestionRef(null);
+    /* ============================================================
+       FINISH
+       ============================================================ */
+    function finishPlay() {
+        GameState.markQuestionsPlayed(category.id, questions.map(q => q.id));
+        GameState.setCurrentPlay(null);
         stopAllMedia();
+        songResetFn = null;
         UIController.showScreen('main');
     }
 
@@ -423,7 +616,7 @@ const QuestionRenderer = (function () {
             whereami: 'WO BIN ICH?',
             barcode:  'MOVIE BARCODE',
             song:     'RATE DEN SONG',
-        })[t] || t.toUpperCase();
+        })[t] || String(t).toUpperCase();
     }
 
     function escapeHtml(s) {

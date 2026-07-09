@@ -9,14 +9,21 @@ const GameState = (function () {
         version: 2,
         avatars: [],          // [{ id, mediaId }]  (media blob lives in MediaCache)
         teams: [],            // [{ id, name, avatarId, score }]
-        categories: [],       // [{ id, name, icon, questions: [...] }]
+        categories: [],       // [{ id, name, icon, type, questions: [...] }]
         currentScreen: 'setup',
-        currentQuestionRef: null, // { categoryId, questionId }
+        currentPlay: null,    // { categoryId, questionIds: [...], mode: 'single'|'round' }
         gameStarted: false,
         settings: {
             showProgress: true,   // toggleable progress bar on main board
         },
     });
+
+    // Round-mode types are played 3 at a time (teams answer on paper, combined
+    // reveal at the end). Single-mode types are played one question at a time.
+    const ROUND_TYPES = ['standard', 'song'];
+    const ROUND_SIZE = 3;
+    function isRoundType(type) { return ROUND_TYPES.includes(type); }
+    function minQuestions(type) { return isRoundType(type) ? 9 : 10; }
 
     let state = load();
 
@@ -28,6 +35,22 @@ const GameState = (function () {
             const merged = Object.assign(defaultState(), parsed);
             // Ensure nested settings object exists with all defaults
             merged.settings = Object.assign(defaultState().settings, parsed.settings || {});
+            // Migrate legacy currentQuestionRef (single ref) to currentPlay shape.
+            if (parsed.currentQuestionRef && !merged.currentPlay) {
+                merged.currentPlay = {
+                    categoryId: parsed.currentQuestionRef.categoryId,
+                    questionIds: [parsed.currentQuestionRef.questionId],
+                    mode: 'single',
+                };
+            }
+            delete merged.currentQuestionRef;
+            // Ensure every category has a type (Phase 2). Infer from its
+            // questions if possible, else default to 'standard'.
+            (merged.categories || []).forEach(c => {
+                if (!c.type) {
+                    c.type = (c.questions && c.questions[0] && c.questions[0].type) || 'standard';
+                }
+            });
             return merged;
         } catch (e) {
             console.warn('GameState: failed to load, resetting.', e);
@@ -99,11 +122,12 @@ const GameState = (function () {
     }
 
     /* ---------- CATEGORIES ---------- */
-    function addCategory() {
+    function addCategory(type = 'standard') {
         const c = {
             id: uid(),
             name: 'Neue Kategorie',
             icon: '🌌',
+            type,
             questions: []
         };
         state.categories.push(c);
@@ -144,6 +168,13 @@ const GameState = (function () {
     function markQuestionPlayed(categoryId, questionId) {
         updateQuestion(categoryId, questionId, { played: true });
     }
+    function markQuestionsPlayed(categoryId, questionIds) {
+        const c = state.categories.find(x => x.id === categoryId);
+        if (!c) return;
+        const ids = new Set(questionIds);
+        c.questions.forEach(q => { if (ids.has(q.id)) q.played = true; });
+        save();
+    }
     function pickRandomUnplayed(categoryId) {
         const c = state.categories.find(x => x.id === categoryId);
         if (!c) return null;
@@ -151,14 +182,31 @@ const GameState = (function () {
         if (pool.length === 0) return null;
         return pool[Math.floor(Math.random() * pool.length)];
     }
+    // Draw up to `n` random unplayed questions (for round-mode categories).
+    function pickRoundQuestions(categoryId, n = ROUND_SIZE) {
+        const c = state.categories.find(x => x.id === categoryId);
+        if (!c) return [];
+        const pool = c.questions.filter(q => !q.played);
+        // Shuffle then take n.
+        for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        return pool.slice(0, n);
+    }
+    function remainingCount(categoryId) {
+        const c = state.categories.find(x => x.id === categoryId);
+        if (!c) return 0;
+        return c.questions.filter(q => !q.played).length;
+    }
 
     /* ---------- SCREEN / FLOW ---------- */
     function setScreen(name) {
         state.currentScreen = name;
         save();
     }
-    function setCurrentQuestionRef(ref) {
-        state.currentQuestionRef = ref;
+    function setCurrentPlay(play) {
+        state.currentPlay = play;
         save();
     }
     function startGame() {
@@ -178,8 +226,9 @@ const GameState = (function () {
         });
         if (state.categories.length === 0) errors.push('Mindestens 1 Kategorie nötig.');
         state.categories.forEach(c => {
-            if (c.questions.length < 10) {
-                errors.push(`Kategorie "${c.name}": ${c.questions.length}/10 Fragen.`);
+            const min = minQuestions(c.type);
+            if (c.questions.length < min) {
+                errors.push(`Kategorie "${c.name}": ${c.questions.length}/${min} Fragen.`);
             }
         });
         return errors;
@@ -265,12 +314,14 @@ const GameState = (function () {
 
     return {
         get, save, load, reset,
+        isRoundType, minQuestions, ROUND_SIZE,
         addAvatar, removeAvatar,
         addTeam, removeTeam, updateTeam, addPointsToTeams,
         addCategory, removeCategory, updateCategory,
         addQuestion, updateQuestion, removeQuestion,
-        markQuestionPlayed, pickRandomUnplayed,
-        setScreen, setCurrentQuestionRef, startGame,
+        markQuestionPlayed, markQuestionsPlayed,
+        pickRandomUnplayed, pickRoundQuestions, remainingCount,
+        setScreen, setCurrentPlay, startGame,
         validateForStart, updateSettings,
         collectMediaIds, migrateMedia,
     };
