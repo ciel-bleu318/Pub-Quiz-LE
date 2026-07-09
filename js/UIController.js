@@ -23,9 +23,25 @@ const UIController = (function () {
             }
         });
 
+        updateHeaderLogo();
+
         // Restore last screen
         const state = GameState.get();
         showScreen(state.currentScreen || 'setup');
+    }
+
+    // Reflect the custom logo (settings.logoMediaId) into the header emblem.
+    function updateHeaderLogo() {
+        const el = document.getElementById('header-logo');
+        if (!el) return;
+        const logoId = GameState.get().settings.logoMediaId;
+        if (logoId) {
+            el.classList.add('has-custom-logo');
+            MediaCache.applyBg(el, logoId);
+        } else {
+            el.classList.remove('has-custom-logo');
+            el.style.backgroundImage = '';
+        }
     }
 
     function showScreen(name) {
@@ -51,5 +67,5 @@ const UIController = (function () {
         if (el) el.textContent = text;
     }
 
-    return { init, showScreen, setStatus };
+    return { init, showScreen, setStatus, updateHeaderLogo };
 })();

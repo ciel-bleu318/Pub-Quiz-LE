@@ -1933,3 +1933,49 @@ body::after {
 .import-status { font-size: 12px; color: var(--text-dim); }
 .import-status.ok { color: var(--turquoise); }
 .import-status.error { color: var(--red); }
+
+/* ============================================================
+   PHASE 5 — CUSTOM LOGO
+   ============================================================ */
+
+/* Header emblem with a custom logo: show the image, hide the ring decorations */
+.logo-glyph.has-custom-logo {
+    border-color: transparent;
+    box-shadow: none;
+    background-size: cover;
+    background-position: center;
+    border-radius: 6px;
+}
+.logo-glyph.has-custom-logo::before,
+.logo-glyph.has-custom-logo::after { display: none; }
+
+/* Setup logo control */
+.logo-control {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+.logo-slot {
+    width: 120px;
+    height: 120px;
+    border: 1.5px dashed var(--line-bright);
+    border-radius: 6px;
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 11px;
+    padding: 10px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+.logo-slot:hover {
+    border-color: var(--turquoise);
+    color: var(--turquoise);
+    box-shadow: var(--glow-turquoise);
+}
+.logo-slot.has-img { border-style: solid; border-color: var(--turquoise); }

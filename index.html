@@ -11,7 +11,7 @@
         <!-- Header -->
         <header id="app-header">
             <div class="logo-block">
-                <div class="logo-glyph"></div>
+                <div class="logo-glyph" id="header-logo"></div>
                 <h1 class="logo-text">QUIZMASTER<span class="logo-sub">// pub quiz console</span></h1>
             </div>
             <nav id="main-nav">
@@ -38,6 +38,12 @@
     <!-- Templates -->
     <template id="tpl-setup">
         <div class="setup-grid">
+            <div class="panel panel-wide" id="panel-logo">
+                <h2 class="panel-title">// IDENTITÄT</h2>
+                <p class="panel-hint">Optionales eigenes Logo — ersetzt das Emblem oben links im Header.</p>
+                <div class="logo-control" id="logo-control"></div>
+            </div>
+
             <div class="panel" id="panel-avatars">
                 <h2 class="panel-title">// AVATAR-POOL</h2>
                 <p class="panel-hint">Lade ~15 Bilder hoch. Teams wählen daraus ihren Avatar.</p>

@@ -69,12 +69,64 @@ const SetupManager = (function () {
         root.innerHTML = '';
         root.appendChild(tpl.content.cloneNode(true));
 
+        renderLogoControl();
         bindAvatarUpload();
         renderAvatarPool();
         renderTeams();
         renderCategories();
         bindActions();
         updateStatus();
+    }
+
+    /* ---------- LOGO ---------- */
+    function renderLogoControl() {
+        const wrap = root.querySelector('#logo-control');
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        const logoId = GameState.get().settings.logoMediaId;
+
+        const slot = document.createElement('div');
+        slot.className = 'logo-slot' + (logoId ? ' has-img' : '');
+        if (logoId) {
+            MediaCache.applyBg(slot, logoId);
+        } else {
+            slot.textContent = 'Logo hochladen (Klick / Ziehen)';
+        }
+
+        async function setLogoFromFile(file) {
+            if (!file || !file.type.startsWith('image/')) return;
+            const mediaId = await MediaCache.put(file);
+            GameState.updateSettings({ logoMediaId: mediaId });
+            MediaCache.pruneExcept(GameState.collectMediaIds());
+            renderLogoControl();
+            UIController.updateHeaderLogo();
+        }
+
+        slot.addEventListener('click', () => {
+            const inp = document.createElement('input');
+            inp.type = 'file'; inp.accept = 'image/*';
+            inp.onchange = () => setLogoFromFile(inp.files[0]);
+            inp.click();
+        });
+        slot.addEventListener('dragover', e => e.preventDefault());
+        slot.addEventListener('drop', e => {
+            e.preventDefault();
+            setLogoFromFile(e.dataTransfer.files[0]);
+        });
+        wrap.appendChild(slot);
+
+        if (logoId) {
+            const rm = document.createElement('button');
+            rm.className = 'btn btn-danger';
+            rm.textContent = 'LOGO ENTFERNEN';
+            rm.addEventListener('click', () => {
+                GameState.updateSettings({ logoMediaId: null });
+                MediaCache.pruneExcept(GameState.collectMediaIds());
+                renderLogoControl();
+                UIController.updateHeaderLogo();
+            });
+            wrap.appendChild(rm);
+        }
     }
 
     /* ---------- AVATAR POOL ---------- */
