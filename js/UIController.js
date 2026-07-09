@@ -15,8 +15,9 @@ const UIController = (function () {
             btn.addEventListener('click', () => showScreen(btn.dataset.screen));
         });
 
-        document.getElementById('reset-btn').addEventListener('click', () => {
+        document.getElementById('reset-btn').addEventListener('click', async () => {
             if (confirm('ACHTUNG: Gesamten Spielstand und alle Daten löschen?')) {
+                await MediaCache.clear();
                 GameState.reset();
                 location.reload();
             }

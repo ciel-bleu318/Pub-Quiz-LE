@@ -6,8 +6,8 @@ const GameState = (function () {
     const STORAGE_KEY = 'quizmaster.state.v1';
 
     const defaultState = () => ({
-        version: 1,
-        avatars: [],          // [{ id, dataUrl }]
+        version: 2,
+        avatars: [],          // [{ id, mediaId }]  (media blob lives in MediaCache)
         teams: [],            // [{ id, name, avatarId, score }]
         categories: [],       // [{ id, name, icon, questions: [...] }]
         currentScreen: 'setup',
@@ -61,8 +61,8 @@ const GameState = (function () {
     }
 
     /* ---------- AVATARS ---------- */
-    function addAvatar(dataUrl) {
-        const a = { id: uid(), dataUrl };
+    function addAvatar(mediaId) {
+        const a = { id: uid(), mediaId };
         state.avatars.push(a);
         save();
         return a;
@@ -185,6 +185,84 @@ const GameState = (function () {
         return errors;
     }
 
+    /* ---------- MEDIA ---------- */
+    // Every media id currently referenced anywhere in the state. Used to
+    // prune orphaned blobs from MediaCache after edits/removals.
+    function collectMediaIds() {
+        const ids = [];
+        state.avatars.forEach(a => { if (a.mediaId) ids.push(a.mediaId); });
+        if (state.settings && state.settings.logoMediaId) ids.push(state.settings.logoMediaId);
+        state.categories.forEach(c => c.questions.forEach(q => {
+            if (Array.isArray(q.images)) q.images.forEach(m => { if (m) ids.push(m); });
+            if (q.imageMediaId) ids.push(q.imageMediaId);
+            if (q.audioMediaId) ids.push(q.audioMediaId);
+        }));
+        return ids;
+    }
+
+    // One-time migration from the old base64 schema (version 1) to
+    // MediaCache-backed ids. Safe to run repeatedly — it only touches
+    // fields still holding legacy data: URLs.
+    async function migrateMedia() {
+        if (typeof MediaCache === 'undefined' || !MediaCache.isSupported()) return;
+        let changed = false;
+
+        for (const a of state.avatars) {
+            if (a.dataUrl && !a.mediaId) {
+                try {
+                    const blob = await MediaCache.dataUrlToBlob(a.dataUrl);
+                    a.mediaId = await MediaCache.put(blob);
+                    delete a.dataUrl;
+                    changed = true;
+                } catch (e) { console.warn('Avatar-Migration fehlgeschlagen', e); }
+            }
+        }
+
+        for (const c of state.categories) {
+            for (const q of c.questions) {
+                // WhereAmI: images was an array of data URLs
+                if (Array.isArray(q.images) && q.images.some(x => typeof x === 'string' && x.startsWith('data:'))) {
+                    const newImages = [];
+                    for (const img of q.images) {
+                        if (typeof img === 'string' && img.startsWith('data:')) {
+                            try {
+                                const blob = await MediaCache.dataUrlToBlob(img);
+                                newImages.push(await MediaCache.put(blob));
+                            } catch (e) { console.warn('Bild-Migration fehlgeschlagen', e); }
+                        } else if (img) {
+                            newImages.push(img);
+                        }
+                    }
+                    q.images = newImages;
+                    changed = true;
+                }
+                // Barcode: imageDataUrl -> imageMediaId
+                if (q.imageDataUrl) {
+                    try {
+                        const blob = await MediaCache.dataUrlToBlob(q.imageDataUrl);
+                        q.imageMediaId = await MediaCache.put(blob);
+                        delete q.imageDataUrl;
+                        changed = true;
+                    } catch (e) { console.warn('Barcode-Migration fehlgeschlagen', e); }
+                }
+                // Song: audioDataUrl -> audioMediaId
+                if (q.audioDataUrl) {
+                    try {
+                        const blob = await MediaCache.dataUrlToBlob(q.audioDataUrl);
+                        q.audioMediaId = await MediaCache.put(blob);
+                        delete q.audioDataUrl;
+                        changed = true;
+                    } catch (e) { console.warn('Song-Migration fehlgeschlagen', e); }
+                }
+            }
+        }
+
+        if (changed) {
+            state.version = 2;
+            save();
+        }
+    }
+
     return {
         get, save, load, reset,
         addAvatar, removeAvatar,
@@ -194,5 +272,6 @@ const GameState = (function () {
         markQuestionPlayed, pickRandomUnplayed,
         setScreen, setCurrentQuestionRef, startGame,
         validateForStart, updateSettings,
+        collectMediaIds, migrateMedia,
     };
 })();

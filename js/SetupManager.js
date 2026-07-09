@@ -6,13 +6,19 @@ const SetupManager = (function () {
     let root;
     let selectedAvatarTarget = null; // teamId currently waiting for an avatar pick
 
-    function fileToDataUrl(file) {
-        return new Promise((resolve, reject) => {
-            const r = new FileReader();
-            r.onload = () => resolve(r.result);
-            r.onerror = reject;
-            r.readAsDataURL(file);
-        });
+    // A media "slot" value is { mediaId } (already cached) or { blob } (pending upload).
+    // persistSlot writes a pending blob to the cache and returns its id.
+    async function persistSlot(val) {
+        if (!val) return null;
+        if (val.mediaId) return val.mediaId;
+        if (val.blob) return await MediaCache.put(val.blob);
+        return null;
+    }
+    // Fill an element's background with a slot's image (async, fire-and-forget).
+    function applySlotPreview(el, val) {
+        if (!val || !el) return;
+        if (val.mediaId) { MediaCache.applyBg(el, val.mediaId); return; }
+        if (val.blob) el.style.backgroundImage = `url("${URL.createObjectURL(val.blob)}")`;
     }
 
     function render() {
@@ -33,17 +39,21 @@ const SetupManager = (function () {
         const zone = root.querySelector('#avatar-upload');
         const input = root.querySelector('#avatar-file-input');
 
-        zone.addEventListener('click', () => input.click());
-        input.addEventListener('change', async (e) => {
-            for (const file of e.target.files) {
+        async function ingestAvatarFiles(fileList) {
+            for (const file of fileList) {
                 if (file.type.startsWith('image/')) {
-                    const dataUrl = await fileToDataUrl(file);
-                    GameState.addAvatar(dataUrl);
+                    const mediaId = await MediaCache.put(file);
+                    GameState.addAvatar(mediaId);
                 }
             }
-            input.value = '';
             renderAvatarPool();
             updateStatus();
+        }
+
+        zone.addEventListener('click', () => input.click());
+        input.addEventListener('change', async (e) => {
+            await ingestAvatarFiles(e.target.files);
+            input.value = '';
         });
 
         ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => {
@@ -53,14 +63,7 @@ const SetupManager = (function () {
             e.preventDefault(); zone.classList.remove('dragover');
         }));
         zone.addEventListener('drop', async (e) => {
-            for (const file of e.dataTransfer.files) {
-                if (file.type.startsWith('image/')) {
-                    const dataUrl = await fileToDataUrl(file);
-                    GameState.addAvatar(dataUrl);
-                }
-            }
-            renderAvatarPool();
-            updateStatus();
+            await ingestAvatarFiles(e.dataTransfer.files);
         });
     }
 
@@ -74,7 +77,7 @@ const SetupManager = (function () {
             const tile = document.createElement('div');
             tile.className = 'avatar-tile';
             if (usedIds.has(a.id)) tile.classList.add('assigned');
-            tile.style.backgroundImage = `url("${a.dataUrl}")`;
+            MediaCache.applyBg(tile, a.mediaId);
             tile.title = usedIds.has(a.id) ? 'Bereits zugewiesen' : 'Klicken zum Zuweisen';
 
             const rm = document.createElement('button');
@@ -84,6 +87,7 @@ const SetupManager = (function () {
                 ev.stopPropagation();
                 if (confirm('Avatar entfernen?')) {
                     GameState.removeAvatar(a.id);
+                    MediaCache.pruneExcept(GameState.collectMediaIds());
                     renderAvatarPool();
                     renderTeams();
                 }
@@ -117,7 +121,7 @@ const SetupManager = (function () {
             slot.className = 'team-avatar-slot';
             const av = state.avatars.find(a => a.id === team.avatarId);
             if (av) {
-                slot.style.backgroundImage = `url("${av.dataUrl}")`;
+                MediaCache.applyBg(slot, av.mediaId);
             } else {
                 slot.textContent = '?';
             }
@@ -334,15 +338,20 @@ const SetupManager = (function () {
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn btn-primary';
         saveBtn.textContent = 'SPEICHERN';
-        saveBtn.onclick = () => {
-            const data = formApi.collect();
-            if (!data) return;
+        saveBtn.onclick = async () => {
+            saveBtn.disabled = true;
+            // collect() may be async (media forms persist blobs to MediaCache
+            // and return ids); awaiting a plain object works the same.
+            const data = await formApi.collect();
+            if (!data) { saveBtn.disabled = false; return; }
             data.type = type;
             if (existing) {
                 GameState.updateQuestion(categoryId, existing.id, data);
             } else {
                 GameState.addQuestion(categoryId, data);
             }
+            // Sweep any media orphaned by replacing images during an edit.
+            MediaCache.pruneExcept(GameState.collectMediaIds());
             closeModal();
             renderCategories();
             updateStatus();
@@ -392,8 +401,9 @@ const SetupManager = (function () {
     }
 
     function buildWhereAmIForm(existing, container) {
-        const images = (existing?.images || [null, null, null]).slice(0, 3);
-        while (images.length < 3) images.push(null);
+        // Each slot holds { mediaId } (already cached) or { blob } (new upload) or null.
+        const slots = (existing?.images || []).slice(0, 3).map(m => (m ? { mediaId: m } : null));
+        while (slots.length < 3) slots.push(null);
         const hints = (existing?.hints || ['', '']).slice(0, 2);
         while (hints.length < 2) hints.push('');
 
@@ -419,10 +429,10 @@ const SetupManager = (function () {
         const slotsEl = container.querySelector('#wa-slots');
         function renderSlots() {
             slotsEl.innerHTML = '';
-            images.forEach((img, idx) => {
+            slots.forEach((val, idx) => {
                 const slot = document.createElement('div');
-                slot.className = 'whereami-slot' + (img ? ' has-img' : '');
-                if (img) slot.style.backgroundImage = `url("${img}")`;
+                slot.className = 'whereami-slot' + (val ? ' has-img' : '');
+                if (val) applySlotPreview(slot, val);
                 else slot.textContent = `Bild ${idx + 1}\nklicken / ziehen`;
                 const num = document.createElement('span');
                 num.className = 'slot-num';
@@ -433,20 +443,20 @@ const SetupManager = (function () {
                     const inp = document.createElement('input');
                     inp.type = 'file';
                     inp.accept = 'image/*';
-                    inp.onchange = async () => {
+                    inp.onchange = () => {
                         if (inp.files[0]) {
-                            images[idx] = await fileToDataUrl(inp.files[0]);
+                            slots[idx] = { blob: inp.files[0] };
                             renderSlots();
                         }
                     };
                     inp.click();
                 });
                 slot.addEventListener('dragover', e => e.preventDefault());
-                slot.addEventListener('drop', async e => {
+                slot.addEventListener('drop', e => {
                     e.preventDefault();
                     const f = e.dataTransfer.files[0];
                     if (f && f.type.startsWith('image/')) {
-                        images[idx] = await fileToDataUrl(f);
+                        slots[idx] = { blob: f };
                         renderSlots();
                     }
                 });
@@ -456,12 +466,17 @@ const SetupManager = (function () {
         renderSlots();
 
         return {
-            collect() {
+            async collect() {
                 const answer = container.querySelector('#wa-answer').value.trim();
                 if (!answer) { alert('Antwort erforderlich.'); return null; }
-                if (!images[0]) { alert('Mindestens das erste Bild erforderlich.'); return null; }
+                if (!slots[0]) { alert('Mindestens das erste Bild erforderlich.'); return null; }
+                const images = [];
+                for (const val of slots) {
+                    const id = await persistSlot(val);
+                    if (id) images.push(id);
+                }
                 return {
-                    images: images.filter(Boolean),
+                    images,
                     hints: [
                         container.querySelector('#wa-hint-1').value.trim(),
                         container.querySelector('#wa-hint-2').value.trim(),
@@ -480,7 +495,8 @@ const SetupManager = (function () {
                 const hue = Math.floor((i / NUM_COLS) * 360);
                 return hslToHex(hue, 60, 45);
             });
-        let uploadedImage = existing?.imageDataUrl || null;
+        // Uploaded image is a slot: { mediaId } (existing) or { blob } (new) or null.
+        let uploadedSlot = existing?.imageMediaId ? { mediaId: existing.imageMediaId } : null;
         const options = (existing?.options || ['', '', '']).slice(0, 3);
         while (options.length < 3) options.push('');
         let correctIndex = existing?.correctIndex ?? 0;
@@ -553,15 +569,19 @@ const SetupManager = (function () {
         // Upload preview
         const uploadInp = container.querySelector('#bc-upload');
         const uploadPrev = container.querySelector('#bc-upload-preview');
-        function refreshPreview() {
-            uploadPrev.innerHTML = uploadedImage
-                ? `<img src="${uploadedImage}" style="max-width:100%; border:1px solid var(--line-bright); border-radius:3px;">`
-                : '';
+        async function refreshPreview() {
+            uploadPrev.innerHTML = '';
+            if (!uploadedSlot) return;
+            const img = document.createElement('img');
+            img.style.cssText = 'max-width:100%; border:1px solid var(--line-bright); border-radius:3px;';
+            if (uploadedSlot.mediaId) img.src = await MediaCache.resolve(uploadedSlot.mediaId) || '';
+            else if (uploadedSlot.blob) img.src = URL.createObjectURL(uploadedSlot.blob);
+            uploadPrev.appendChild(img);
         }
         refreshPreview();
-        uploadInp.addEventListener('change', async () => {
+        uploadInp.addEventListener('change', () => {
             if (uploadInp.files[0]) {
-                uploadedImage = await fileToDataUrl(uploadInp.files[0]);
+                uploadedSlot = { blob: uploadInp.files[0] };
                 refreshPreview();
             }
         });
@@ -591,19 +611,22 @@ const SetupManager = (function () {
         renderOptions();
 
         return {
-            collect() {
+            async collect() {
                 const answer = container.querySelector('#bc-answer').value.trim();
                 if (!answer) { alert('Filmtitel erforderlich.'); return null; }
                 if (options.some(o => !o.trim())) { alert('Alle 3 Optionen ausfüllen.'); return null; }
-                // canvas image as fallback if no upload
-                let imageDataUrl = uploadedImage;
-                if (!imageDataUrl) {
-                    imageDataUrl = canvas.toDataURL('image/png');
+                // Uploaded image wins; otherwise render the built barcode canvas to a blob.
+                let imageMediaId;
+                if (uploadedSlot) {
+                    imageMediaId = await persistSlot(uploadedSlot);
+                } else {
+                    const blob = await MediaCache.canvasToBlob(canvas, 'image/png');
+                    imageMediaId = await MediaCache.put(blob);
                 }
                 return {
                     answer,
                     colors: colors.slice(),
-                    imageDataUrl,
+                    imageMediaId,
                     options: options.slice(),
                     correctIndex,
                 };
@@ -612,20 +635,22 @@ const SetupManager = (function () {
     }
 
     function buildSongForm(existing, container) {
-        let audioDataUrl = existing?.audioDataUrl || null;
+        // Audio slot: { mediaId } (existing) or { blob } (new) or null.
+        let audioSlot = existing?.audioMediaId ? { mediaId: existing.audioMediaId } : null;
+        const hasAudio = !!audioSlot;
 
         container.innerHTML = `
             <div class="modal-tabs">
-                <button class="modal-tab ${!audioDataUrl ? 'active' : ''}" data-tab="yt">YOUTUBE</button>
-                <button class="modal-tab ${audioDataUrl ? 'active' : ''}" data-tab="upload">AUDIO HOCHLADEN</button>
+                <button class="modal-tab ${!hasAudio ? 'active' : ''}" data-tab="yt">YOUTUBE</button>
+                <button class="modal-tab ${hasAudio ? 'active' : ''}" data-tab="upload">AUDIO HOCHLADEN</button>
             </div>
-            <div class="tab-content ${!audioDataUrl ? 'active' : ''}" data-tab="yt">
+            <div class="tab-content ${!hasAudio ? 'active' : ''}" data-tab="yt">
                 <div class="form-group">
                     <label>YOUTUBE-LINK</label>
                     <input type="url" id="s-yt" value="${escapeHtml(existing?.youtubeUrl || '')}" placeholder="https://www.youtube.com/watch?v=…">
                 </div>
             </div>
-            <div class="tab-content ${audioDataUrl ? 'active' : ''}" data-tab="upload">
+            <div class="tab-content ${hasAudio ? 'active' : ''}" data-tab="upload">
                 <div class="form-group">
                     <label>AUDIO-DATEI (MP3 / OGG / WAV)</label>
                     <input type="file" id="s-file" accept="audio/*">
@@ -653,29 +678,35 @@ const SetupManager = (function () {
 
         const fileInp = container.querySelector('#s-file');
         const prev = container.querySelector('#s-preview');
-        function refreshPrev() {
-            prev.innerHTML = audioDataUrl
-                ? `<audio controls src="${audioDataUrl}" style="width:100%;"></audio>`
-                : '';
+        async function refreshPrev() {
+            prev.innerHTML = '';
+            if (!audioSlot) return;
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.style.width = '100%';
+            if (audioSlot.mediaId) audio.src = await MediaCache.resolve(audioSlot.mediaId) || '';
+            else if (audioSlot.blob) audio.src = URL.createObjectURL(audioSlot.blob);
+            prev.appendChild(audio);
         }
         refreshPrev();
-        fileInp.addEventListener('change', async () => {
+        fileInp.addEventListener('change', () => {
             if (fileInp.files[0]) {
-                audioDataUrl = await fileToDataUrl(fileInp.files[0]);
+                audioSlot = { blob: fileInp.files[0] };
                 refreshPrev();
             }
         });
 
         return {
-            collect() {
+            async collect() {
                 const yt = container.querySelector('#s-yt').value.trim();
                 const stopAfter = parseInt(container.querySelector('#s-stop').value, 10) || 20;
                 const answer = container.querySelector('#s-answer').value.trim();
                 if (!answer) { alert('Antwort erforderlich.'); return null; }
-                if (!yt && !audioDataUrl) { alert('YouTube-Link oder Audio-Datei erforderlich.'); return null; }
+                if (!yt && !audioSlot) { alert('YouTube-Link oder Audio-Datei erforderlich.'); return null; }
+                const audioMediaId = await persistSlot(audioSlot);
                 return {
                     youtubeUrl: yt || null,
-                    audioDataUrl: audioDataUrl || null,
+                    audioMediaId: audioMediaId || null,
                     stopAfter,
                     answer,
                 };

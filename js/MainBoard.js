@@ -120,10 +120,11 @@ const MainBoard = (function () {
 
             row.innerHTML = `
                 <div class="score-rank">${String(idx + 1).padStart(2, '0')}</div>
-                <div class="score-avatar" style="${av ? `background-image:url('${av.dataUrl}')` : ''}">${av ? '' : '?'}</div>
+                <div class="score-avatar">${av ? '' : '?'}</div>
                 <div class="score-name">${escapeHtml(team.name)}</div>
                 <div class="score-points">${team.score}</div>
             `;
+            if (av) MediaCache.applyBg(row.querySelector('.score-avatar'), av.mediaId);
             list.appendChild(row);
         });
 

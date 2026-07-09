@@ -133,9 +133,10 @@ const QuestionRenderer = (function () {
             block.className = 'wa-block' + (i === revealedStep ? ' current' : '');
             block.innerHTML = `
                 <div class="wa-block-label">BILD ${String(i + 1).padStart(2, '0')}</div>
-                <img src="${imgs[i]}" alt="">
+                <img alt="">
                 ${i > 0 && hints[i - 1] ? `<div class="wa-hint">TIPP // ${escapeHtml(hints[i - 1])}</div>` : ''}
             `;
+            MediaCache.applySrc(block.querySelector('img'), imgs[i]);
             stageEl.appendChild(block);
         }
 
@@ -155,11 +156,12 @@ const QuestionRenderer = (function () {
         stage.innerHTML = `
             <div class="q-barcode">
                 <div class="barcode-display">
-                    <img src="${q.imageDataUrl}" alt="Movie Barcode">
+                    <img alt="Movie Barcode">
                 </div>
                 <div class="barcode-choices" id="bc-choices"></div>
             </div>
         `;
+        MediaCache.applySrc(stage.querySelector('.barcode-display img'), q.imageMediaId);
         const choices = root.querySelector('#bc-choices');
         q.options.forEach((opt, i) => {
             const btn = document.createElement('button');
@@ -234,16 +236,19 @@ const QuestionRenderer = (function () {
             playBtn.onclick = () => startSong(playBtn);
         };
 
-        if (q.audioDataUrl) {
+        if (q.audioMediaId) {
             stopAllMedia();
-            audioEl = new Audio(q.audioDataUrl);
-            audioEl.play().catch(err => {
-                statusEl.textContent = 'AUDIO-FEHLER: ' + err.message;
+            MediaCache.resolve(q.audioMediaId).then(url => {
+                if (!url) { statusEl.textContent = 'AUDIO NICHT GEFUNDEN'; playBtn.disabled = false; return; }
+                audioEl = new Audio(url);
+                audioEl.play().catch(err => {
+                    statusEl.textContent = 'AUDIO-FEHLER: ' + err.message;
+                });
+                ytStopTimer = setTimeout(() => {
+                    if (audioEl) { audioEl.pause(); audioEl = null; }
+                    finish();
+                }, q.stopAfter * 1000);
             });
-            ytStopTimer = setTimeout(() => {
-                if (audioEl) { audioEl.pause(); audioEl = null; }
-                finish();
-            }, q.stopAfter * 1000);
         } else if (q.youtubeUrl) {
             const videoId = extractYouTubeId(q.youtubeUrl);
             if (!videoId) {
@@ -367,11 +372,12 @@ const QuestionRenderer = (function () {
             const tile = document.createElement('button');
             tile.className = 'scoring-tile' + (selectedTeams.has(team.id) ? ' selected' : '');
             tile.innerHTML = `
-                <div class="scoring-avatar" style="${av ? `background-image:url('${av.dataUrl}')` : ''}">${av ? '' : '?'}</div>
+                <div class="scoring-avatar">${av ? '' : '?'}</div>
                 <div class="scoring-name">${escapeHtml(team.name)}</div>
                 <div class="scoring-score">${team.score} PKT</div>
                 <div class="scoring-check">+1</div>
             `;
+            if (av) MediaCache.applyBg(tile.querySelector('.scoring-avatar'), av.mediaId);
             tile.onclick = () => {
                 if (selectedTeams.has(team.id)) selectedTeams.delete(team.id);
                 else selectedTeams.add(team.id);
