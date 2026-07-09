@@ -282,7 +282,14 @@ const QuestionRenderer = (function () {
         if (q.type === 'song') {
             item.appendChild(buildSongPlayer(q));
         } else {
-            // standard (and any other prompt-based type)
+            // standard (and any other prompt-based type) — optional image
+            if (q.imageMediaId) {
+                const img = document.createElement('img');
+                img.className = 'round-item-img';
+                img.alt = '';
+                MediaCache.applySrc(img, q.imageMediaId);
+                item.appendChild(img);
+            }
             const prompt = document.createElement('div');
             prompt.className = 'q-prompt round-prompt';
             prompt.textContent = q.question;
@@ -393,7 +400,11 @@ const QuestionRenderer = (function () {
     function buildStandardStage(q) {
         const el = document.createElement('div');
         el.className = 'q-standard';
-        el.innerHTML = `<div class="q-prompt">${escapeHtml(q.question)}</div>`;
+        let html = '';
+        if (q.imageMediaId) html += `<img class="q-standard-img" alt="">`;
+        html += `<div class="q-prompt">${escapeHtml(q.question)}</div>`;
+        el.innerHTML = html;
+        if (q.imageMediaId) MediaCache.applySrc(el.querySelector('.q-standard-img'), q.imageMediaId);
         return el;
     }
 
@@ -614,7 +625,7 @@ const QuestionRenderer = (function () {
         return ({
             standard: 'STANDARD',
             whereami: 'WO BIN ICH?',
-            barcode:  'MOVIE BARCODE',
+            barcode:  'BILD + MC',
             song:     'RATE DEN SONG',
         })[t] || String(t).toUpperCase();
     }

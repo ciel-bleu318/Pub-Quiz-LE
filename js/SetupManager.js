@@ -10,7 +10,7 @@ const SetupManager = (function () {
         standard: 'STANDARD',
         song:     'RATE DEN SONG',
         whereami: 'WO BIN ICH?',
-        barcode:  'MOVIE BARCODE',
+        barcode:  'BILD + MC',   // generic image + multiple choice (incl. movie barcode)
     };
 
     // A media "slot" value is { mediaId } (already cached) or { blob } (pending upload).
@@ -26,6 +26,42 @@ const SetupManager = (function () {
         if (!val || !el) return;
         if (val.mediaId) { MediaCache.applyBg(el, val.mediaId); return; }
         if (val.blob) el.style.backgroundImage = `url("${URL.createObjectURL(val.blob)}")`;
+    }
+
+    // A reusable single-image drop/click slot with preview + remove.
+    // `el` is the container; returns { get } yielding the current slot value.
+    function makeSingleImageSlot(el, initial, placeholder = 'Bild hierher ziehen oder klicken') {
+        let slot = initial || null; // {mediaId}|{blob}|null
+        function render() {
+            el.style.backgroundImage = '';
+            el.innerHTML = '';
+            el.className = 'single-image-slot' + (slot ? ' has-img' : '');
+            if (slot) {
+                applySlotPreview(el, slot);
+                const rm = document.createElement('button');
+                rm.type = 'button';
+                rm.className = 'single-image-remove';
+                rm.textContent = '×';
+                rm.onclick = (e) => { e.stopPropagation(); slot = null; render(); };
+                el.appendChild(rm);
+            } else {
+                el.textContent = placeholder;
+            }
+        }
+        el.addEventListener('click', () => {
+            const inp = document.createElement('input');
+            inp.type = 'file'; inp.accept = 'image/*';
+            inp.onchange = () => { if (inp.files[0]) { slot = { blob: inp.files[0] }; render(); } };
+            inp.click();
+        });
+        el.addEventListener('dragover', e => e.preventDefault());
+        el.addEventListener('drop', e => {
+            e.preventDefault();
+            const f = e.dataTransfer.files[0];
+            if (f && f.type.startsWith('image/')) { slot = { blob: f }; render(); }
+        });
+        render();
+        return { get: () => slot };
     }
 
     function render() {
@@ -286,7 +322,7 @@ const SetupManager = (function () {
         tag.textContent = ({
             standard: 'STANDARD',
             whereami: 'WO BIN ICH?',
-            barcode:  'BARCODE',
+            barcode:  'BILD + MC',
             song:     'SONG',
         })[q.type] || q.type.toUpperCase();
 
@@ -317,7 +353,7 @@ const SetupManager = (function () {
         switch (q.type) {
             case 'standard': return q.question || '(leer)';
             case 'whereami': return 'Antwort: ' + (q.answer || '(leer)');
-            case 'barcode':  return 'Film: ' + (q.answer || '(leer)');
+            case 'barcode':  return 'Antwort: ' + (q.answer || '(leer)');
             case 'song':     return 'Antwort: ' + (q.answer || '(leer)');
             default: return '(unbekannt)';
         }
@@ -340,7 +376,7 @@ const SetupManager = (function () {
 
         const title = document.createElement('h3');
         title.className = 'modal-title';
-        title.textContent = (existing ? '// FRAGE BEARBEITEN — ' : '// NEUE FRAGE — ') + type.toUpperCase();
+        title.textContent = (existing ? '// FRAGE BEARBEITEN — ' : '// NEUE FRAGE — ') + (TYPE_LABELS[type] || type.toUpperCase());
         box.appendChild(title);
 
         const sub = document.createElement('p');
@@ -410,16 +446,25 @@ const SetupManager = (function () {
                 <textarea id="f-question" placeholder="Wie heißt die Hauptstadt von …">${existing?.question || ''}</textarea>
             </div>
             <div class="form-group">
+                <label>BILD (OPTIONAL) — z. B. für „KI-Slop erraten"</label>
+                <div class="single-image-slot" id="f-img"></div>
+            </div>
+            <div class="form-group">
                 <label>ANTWORT</label>
                 <input type="text" id="f-answer" value="${escapeHtml(existing?.answer || '')}" placeholder="Antwort">
             </div>
         `;
+        const imgSlot = makeSingleImageSlot(
+            container.querySelector('#f-img'),
+            existing?.imageMediaId ? { mediaId: existing.imageMediaId } : null
+        );
         return {
-            collect() {
+            async collect() {
                 const question = container.querySelector('#f-question').value.trim();
                 const answer = container.querySelector('#f-answer').value.trim();
                 if (!question || !answer) { alert('Frage und Antwort erforderlich.'); return null; }
-                return { question, answer };
+                const imageMediaId = await persistSlot(imgSlot.get());
+                return { question, answer, imageMediaId: imageMediaId || null };
             }
         };
     }
@@ -526,9 +571,11 @@ const SetupManager = (function () {
         let correctIndex = existing?.correctIndex ?? 0;
 
         container.innerHTML = `
+            <p class="modal-hint">Bild + 3 Antwortoptionen. Nutze den Farbstreifen-Builder
+            (Movie Barcode) oder lade ein fertiges Bild / eine Collage hoch (z. B. Nationalgerichte).</p>
             <div class="modal-tabs">
-                <button class="modal-tab active" data-tab="builder">BARCODE BAUEN</button>
-                <button class="modal-tab" data-tab="upload">BILD HOCHLADEN</button>
+                <button class="modal-tab active" data-tab="builder">FARBSTREIFEN (BARCODE)</button>
+                <button class="modal-tab" data-tab="upload">BILD / COLLAGE HOCHLADEN</button>
             </div>
             <div class="tab-content active" data-tab="builder">
                 <div class="barcode-builder">
@@ -540,14 +587,14 @@ const SetupManager = (function () {
             </div>
             <div class="tab-content" data-tab="upload">
                 <div class="form-group">
-                    <label>FERTIGES BARCODE-BILD</label>
+                    <label>FERTIGES BILD / COLLAGE</label>
                     <input type="file" id="bc-upload" accept="image/*">
                     <div id="bc-upload-preview" style="margin-top:10px;"></div>
                 </div>
             </div>
             <div class="form-group">
-                <label>FILMTITEL (Auflösung)</label>
-                <input type="text" id="bc-answer" value="${escapeHtml(existing?.answer || '')}" placeholder="z. B. Blade Runner">
+                <label>AUFLÖSUNG (richtige Antwort)</label>
+                <input type="text" id="bc-answer" value="${escapeHtml(existing?.answer || '')}" placeholder="z. B. Blade Runner / Italien">
             </div>
             <div class="form-group">
                 <label>3 ANTWORTOPTIONEN — eine markieren als korrekt</label>
@@ -637,7 +684,7 @@ const SetupManager = (function () {
         return {
             async collect() {
                 const answer = container.querySelector('#bc-answer').value.trim();
-                if (!answer) { alert('Filmtitel erforderlich.'); return null; }
+                if (!answer) { alert('Auflösung erforderlich.'); return null; }
                 if (options.some(o => !o.trim())) { alert('Alle 3 Optionen ausfüllen.'); return null; }
                 // Uploaded image wins; otherwise render the built barcode canvas to a blob.
                 let imageMediaId;

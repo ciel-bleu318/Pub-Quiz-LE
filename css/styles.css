@@ -1805,3 +1805,80 @@ body::after {
     color: var(--gold);
     text-align: center;
 }
+
+/* ============================================================
+   PHASE 3 — OPTIONAL STANDARD IMAGE + GENERIC IMAGE-MC
+   ============================================================ */
+
+.modal-hint {
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    border-left: 2px solid var(--violet);
+    background: rgba(181, 108, 255, 0.06);
+    border-radius: 0 4px 4px 0;
+}
+
+/* Reusable single-image drop/click slot (setup) */
+.single-image-slot {
+    position: relative;
+    min-height: 150px;
+    border: 1.5px dashed var(--line-bright);
+    border-radius: 4px;
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 12px;
+    padding: 12px;
+    transition: all 0.2s ease;
+}
+.single-image-slot:hover {
+    border-color: var(--turquoise);
+    color: var(--turquoise);
+    box-shadow: var(--glow-turquoise);
+}
+.single-image-slot.has-img { border-style: solid; border-color: var(--turquoise); }
+.single-image-remove {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--bg-deep);
+    border: 1px solid var(--red);
+    color: var(--red);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.single-image-remove:hover { background: rgba(255, 77, 109, 0.15); }
+
+/* Standard question image (question page) */
+.q-standard-img {
+    display: block;
+    max-width: 100%;
+    max-height: 420px;
+    margin: 0 auto 24px;
+    border: 1.5px solid var(--turquoise);
+    border-radius: 6px;
+    box-shadow: var(--glow-turquoise);
+}
+
+/* Round-item image */
+.round-item-img {
+    display: block;
+    max-width: 100%;
+    max-height: 260px;
+    margin: 0 auto 14px;
+    border: 1px solid var(--line-bright);
+    border-radius: 4px;
+}
