@@ -3,16 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1280">
-    <title>Quizmaster — Pub Quiz</title>
+    <title>Nebula Nighthawks — Pub Quiz</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+    <!-- Global atmosphere: drifting smoke, film grain, scanlines, vignette -->
+    <div id="atmosphere" aria-hidden="true">
+        <div class="atmo-fog">
+            <span class="wisp w1"></span>
+            <span class="wisp w2"></span>
+            <span class="wisp w3"></span>
+            <span class="wisp w4"></span>
+            <span class="wisp w5"></span>
+        </div>
+        <div class="atmo-grain"></div>
+        <div class="atmo-scanlines"></div>
+        <div class="atmo-vignette"></div>
+    </div>
+
     <div id="app">
         <!-- Header -->
         <header id="app-header">
             <div class="logo-block">
-                <div class="logo-glyph" id="header-logo"></div>
-                <h1 class="logo-text">QUIZMASTER<span class="logo-sub">// pub quiz console</span></h1>
+                <div class="logo-emblem" id="header-logo">
+                    <svg class="hawk-icon" viewBox="0 0 120 70" aria-hidden="true">
+                        <path fill="currentColor" d="M5,46 L36,20 L48,30 L60,10 L72,30 L84,20 L115,46 L88,38 L68,64 L60,52 L52,64 L32,38 Z"/>
+                    </svg>
+                </div>
+                <div class="logo-text-block">
+                    <span class="logo-name-wrap">
+                        <span class="logo-name">Nebula Nighthawks</span>
+                        <svg class="smoke-stream" viewBox="0 0 40 100" width="26" height="64" aria-hidden="true">
+                            <defs>
+                                <linearGradient id="smokeFade" x1="0" y1="1" x2="0" y2="0">
+                                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.9"/>
+                                    <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
+                                </linearGradient>
+                            </defs>
+                            <path class="stream s1" d="M20,96 C6,80 34,64 16,46 C0,30 28,16 18,0" stroke="url(#smokeFade)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+                            <path class="stream s2" d="M14,96 C28,82 4,62 22,44 C34,28 10,14 20,0" stroke="url(#smokeFade)" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+                            <path class="stream s3" d="M24,96 C10,78 30,58 12,40 C-2,24 22,8 14,0" stroke="url(#smokeFade)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                    <span class="logo-tagline">Midnight Lounge of the Outer Rim</span>
+                </div>
             </div>
             <nav id="main-nav">
                 <button class="nav-btn" data-screen="setup">SETUP</button>
@@ -31,7 +65,7 @@
         <footer id="app-footer">
             <span class="footer-coord">// COORD 47.21°N · 8.54°E</span>
             <span class="footer-status" id="footer-status">SYSTEM BEREIT</span>
-            <span class="footer-coord">// LOCAL STORAGE ACTIVE</span>
+            <span class="footer-coord">// OUTER RIM · LOCAL CACHE</span>
         </footer>
     </div>
 

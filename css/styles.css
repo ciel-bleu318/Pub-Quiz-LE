@@ -1,39 +1,74 @@
 /* ============================================================
-   QUIZMASTER — Moebius / Giraud inspired stylesheet
+   NEBULA NIGHTHAWKS — Moebius × Cowboy-Bebop stylesheet
+   Retro-futurism · space-western · neo-noir · analog nostalgia
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Major+Mono+Display&display=swap');
+/* Self-hosted character fonts (no CDN dependency) */
+@font-face {
+    font-family: 'Kalam';
+    font-style: normal; font-weight: 400; font-display: swap;
+    src: url('../fonts/kalam-400.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Kalam';
+    font-style: normal; font-weight: 700; font-display: swap;
+    src: url('../fonts/kalam-700.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Rye';
+    font-style: normal; font-weight: 400; font-display: swap;
+    src: url('../fonts/rye-400.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Special Elite';
+    font-style: normal; font-weight: 400; font-display: swap;
+    src: url('../fonts/special-elite-400.woff2') format('woff2');
+}
 
 :root {
-    /* Cosmic palette */
-    --bg-deep:      #06070d;
-    --bg-panel:     #0c0f1c;
-    --bg-panel-2:   #131830;
-    --line:         #1f2647;
-    --line-bright:  #2c3a73;
+    /* Nebula palette — violet base, gold scene accent, red neon logo */
+    --bg-deep:      #14101F;
+    --bg-panel:     #1D1730;
+    --bg-panel-2:   #241F35;
+    --line:         #3E3059;
+    --line-bright:  #55407D;
 
-    --turquoise:    #4ff0d4;
-    --turquoise-d:  #14b89a;
-    --orange:       #ff8a3d;
-    --orange-d:     #d6601a;
-    --violet:       #b56cff;
-    --violet-d:     #7d3ad6;
-    --gold:         #ffce5c;
-    --gold-d:       #d6a02b;
-    --pink:         #ff5ca8;
-    --red:          #ff4d6d;
+    /* Named after their old roles for continuity; values are the new palette.
+       --turquoise is the primary cool interactive accent (cornflower). */
+    --turquoise:    #7B98E8;
+    --turquoise-d:  #4A6FA5;
+    --orange:       #E8935B;
+    --orange-d:     #C56A34;
+    --violet:       #C7AEE0;
+    --violet-d:     #7C5FB0;
+    --gold:         #E8C468;
+    --gold-d:       #C69F3A;
+    --pink:         #E8628F;
+    --red:          #E5484D;
 
-    --text:         #e8efff;
-    --text-dim:     #8a93b8;
-    --text-faint:   #4d5680;
+    /* Scene-specific tones */
+    --violet-base:  #9678B6;
+    --violet-deep:  #4E3A70;
+    --cornflower:   #7B98E8;
+    --xanadu:       #A4B0A7;
+    --neon-red:     #E5484D;
 
-    --glow-turquoise: 0 0 8px rgba(79, 240, 212, 0.5), 0 0 22px rgba(79, 240, 212, 0.25);
-    --glow-orange:    0 0 8px rgba(255, 138, 61, 0.5), 0 0 22px rgba(255, 138, 61, 0.25);
-    --glow-violet:    0 0 8px rgba(181, 108, 255, 0.5), 0 0 22px rgba(181, 108, 255, 0.25);
-    --glow-gold:      0 0 8px rgba(255, 206, 92, 0.5), 0 0 22px rgba(255, 206, 92, 0.25);
+    --text:         #F2EEFB;
+    --text-dim:     #C2B3DC;
+    --text-faint:   #8B77AD;
 
-    --font-display: 'Major Mono Display', monospace;
-    --font-body:    'Space Grotesk', system-ui, sans-serif;
+    --glow-turquoise: 0 0 8px rgba(123, 152, 232, 0.5), 0 0 22px rgba(123, 152, 232, 0.25);
+    --glow-orange:    0 0 8px rgba(232, 147, 91, 0.5), 0 0 22px rgba(232, 147, 91, 0.25);
+    --glow-violet:    0 0 8px rgba(199, 174, 224, 0.5), 0 0 22px rgba(199, 174, 224, 0.25);
+    --glow-gold:      0 0 10px rgba(232, 196, 104, 0.55), 0 0 26px rgba(232, 147, 91, 0.28);
+    --glow-red:       0 0 12px rgba(229, 72, 77, 0.65), 0 0 30px rgba(229, 72, 77, 0.3);
+    --glow-cornflower:0 0 8px rgba(123, 152, 232, 0.5), 0 0 22px rgba(123, 152, 232, 0.25);
+
+    --font-display: ui-monospace, 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+    --font-body:    system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    --font-hand:    'Kalam', 'Comic Sans MS', cursive;
+    --font-grunge-title: 'Rye', Georgia, serif;
+    --font-grunge-tag:   'Special Elite', 'Courier New', monospace;
 }
 
 * {
@@ -44,36 +79,62 @@
 
 html, body {
     height: 100%;
-    background: var(--bg-deep);
     color: var(--text);
     font-family: var(--font-body);
     font-size: 15px;
     overflow-x: hidden;
 }
-
-/* Animated background — faint star/grid layer */
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
+body {
+    /* Smoky violet sky: dark at the crown, warming toward the horizon. */
     background:
-        radial-gradient(ellipse at 20% 10%, rgba(181, 108, 255, 0.08), transparent 60%),
-        radial-gradient(ellipse at 80% 90%, rgba(79, 240, 212, 0.06), transparent 60%),
-        radial-gradient(ellipse at 50% 50%, rgba(255, 138, 61, 0.04), transparent 70%);
-    pointer-events: none;
-    z-index: 0;
+        radial-gradient(ellipse 100% 60% at 50% 0%, rgba(20,16,31,0.9), transparent 62%),
+        linear-gradient(180deg, var(--bg-deep) 0%, var(--violet-deep) 42%, var(--violet-base) 78%, #7C4E5A 100%);
+    background-attachment: fixed;
 }
 
-body::after {
-    content: "";
+/* ============================================================
+   ATMOSPHERE — global smoke/grain/scanlines/vignette (all screens)
+   ============================================================ */
+#atmosphere {
     position: fixed;
     inset: 0;
-    background-image:
-        linear-gradient(rgba(44, 58, 115, 0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(44, 58, 115, 0.08) 1px, transparent 1px);
-    background-size: 60px 60px;
-    pointer-events: none;
     z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+.atmo-fog { position: absolute; inset: 0; }
+.atmo-fog .wisp {
+    position: absolute;
+    border-radius: 50%;
+    mix-blend-mode: screen;
+    background: radial-gradient(ellipse, rgba(232,226,240,0.85), rgba(232,226,240,0) 68%);
+}
+.atmo-fog .w1 { width: 42vw; height: 16vh; top: 12%; left: -12%; filter: blur(30px); animation: fogR1 34s ease-in-out infinite; }
+.atmo-fog .w2 { width: 34vw; height: 13vh; top: 44%; left: -8%; filter: blur(26px); animation: fogR2 42s ease-in-out infinite; animation-delay: -11s; }
+.atmo-fog .w3 { width: 48vw; height: 18vh; top: 66%; right: -12%; filter: blur(34px); background: radial-gradient(ellipse, rgba(205,190,222,0.8), rgba(205,190,222,0) 68%); animation: fogL1 38s ease-in-out infinite; }
+.atmo-fog .w4 { width: 28vw; height: 12vh; top: 28%; right: -8%; filter: blur(22px); animation: fogL2 47s ease-in-out infinite; animation-delay: -18s; }
+.atmo-fog .w5 { width: 56vw; height: 20vh; top: 52%; left: -14%; filter: blur(40px); animation: fogR3 55s ease-in-out infinite; animation-delay: -7s; }
+@keyframes fogR1 { 0%{transform:translateX(0);opacity:0;} 12%{opacity:.30;} 85%{opacity:.30;} 100%{transform:translateX(60vw);opacity:0;} }
+@keyframes fogR2 { 0%{transform:translateX(0);opacity:0;} 15%{opacity:.22;} 85%{opacity:.22;} 100%{transform:translateX(56vw);opacity:0;} }
+@keyframes fogL1 { 0%{transform:translateX(0);opacity:0;} 12%{opacity:.26;} 85%{opacity:.26;} 100%{transform:translateX(-62vw);opacity:0;} }
+@keyframes fogL2 { 0%{transform:translateX(0);opacity:0;} 15%{opacity:.18;} 85%{opacity:.18;} 100%{transform:translateX(-52vw);opacity:0;} }
+@keyframes fogR3 { 0%{transform:translateX(0);opacity:0;} 10%{opacity:.16;} 88%{opacity:.16;} 100%{transform:translateX(64vw);opacity:0;} }
+
+.atmo-grain {
+    position: absolute; inset: 0;
+    opacity: 0.22;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+.atmo-scanlines {
+    position: absolute; inset: 0;
+    opacity: 0.08;
+    mix-blend-mode: multiply;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,0.9) 0px, rgba(0,0,0,0.9) 1px, transparent 1px, transparent 3px);
+}
+.atmo-vignette {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 75% at 50% 42%, transparent 48%, rgba(8,5,14,0.7) 100%);
 }
 
 #app {
@@ -92,52 +153,92 @@ body::after {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px 36px;
+    padding: 16px 36px;
     border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, rgba(12, 15, 28, 0.9), rgba(12, 15, 28, 0.4));
+    background: linear-gradient(180deg, rgba(20, 16, 31, 0.72), rgba(20, 16, 31, 0.28));
     backdrop-filter: blur(4px);
 }
 
 .logo-block {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
+    --logo-accent: var(--neon-red);
 }
 
-.logo-glyph {
+/* Emblem: hawk silhouette by default, custom uploaded logo if set */
+.logo-emblem {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--logo-accent);
+    flex-shrink: 0;
+}
+.hawk-icon {
     width: 38px;
-    height: 38px;
-    border: 1.5px solid var(--turquoise);
-    border-radius: 50%;
-    position: relative;
-    box-shadow: var(--glow-turquoise);
+    height: 22px;
+    filter: drop-shadow(0 0 6px var(--logo-accent));
 }
-.logo-glyph::before, .logo-glyph::after {
-    content: "";
-    position: absolute;
-    inset: 4px;
-    border-radius: 50%;
-    border: 1px solid var(--orange);
+.logo-emblem.has-custom-logo {
+    background-size: cover;
+    background-position: center;
+    border-radius: 6px;
+    box-shadow: var(--glow-red);
 }
-.logo-glyph::after {
-    inset: 12px;
-    border-color: var(--gold);
+.logo-emblem.has-custom-logo .hawk-icon { display: none; }
+
+.logo-text-block {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.logo-name-wrap { position: relative; display: inline-block; }
+.logo-name {
+    font-family: var(--font-grunge-title);
+    font-size: 24px;
+    color: var(--logo-accent);
+    text-shadow: var(--glow-red);
+    letter-spacing: 0.5px;
+    line-height: 1.05;
+    white-space: nowrap;
+}
+.logo-tagline {
+    font-family: var(--font-grunge-tag);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text-faint);
 }
 
-.logo-text {
-    font-family: var(--font-display);
-    font-size: 22px;
-    letter-spacing: 4px;
-    color: var(--turquoise);
-    text-shadow: var(--glow-turquoise);
+/* Cigarette-smoke drifting off the last letter of the name */
+.smoke-stream {
+    position: absolute;
+    top: -58px;
+    right: 2px;
+    color: var(--logo-accent);
+    filter: blur(1.1px);
+    overflow: visible;
+    pointer-events: none;
 }
-.logo-sub {
-    display: block;
-    font-family: var(--font-body);
-    font-size: 10px;
-    letter-spacing: 3px;
-    color: var(--text-faint);
-    margin-top: 2px;
+.smoke-stream .stream { transform-origin: 50% 100%; }
+.smoke-stream .s1 { animation: streamFlow1 5s ease-in-out infinite; }
+.smoke-stream .s2 { animation: streamFlow2 6.4s ease-in-out infinite; animation-delay: -2.1s; }
+.smoke-stream .s3 { animation: streamFlow3 7.6s ease-in-out infinite; animation-delay: -4.3s; }
+@keyframes streamFlow1 {
+    0%{transform:translate(0,10px) scaleY(0.85);opacity:0;} 16%{opacity:.85;}
+    50%{transform:translate(3px,-6px) scaleY(1.05);opacity:.6;} 84%{opacity:.3;}
+    100%{transform:translate(-4px,-20px) scaleY(1.2);opacity:0;}
+}
+@keyframes streamFlow2 {
+    0%{transform:translate(0,10px) scaleY(0.8);opacity:0;} 18%{opacity:.55;}
+    50%{transform:translate(-4px,-8px) scaleY(1.1);opacity:.4;} 86%{opacity:.18;}
+    100%{transform:translate(3px,-22px) scaleY(1.25);opacity:0;}
+}
+@keyframes streamFlow3 {
+    0%{transform:translate(0,10px) scaleY(0.85);opacity:0;} 20%{opacity:.35;}
+    50%{transform:translate(4px,-7px) scaleY(1.05);opacity:.25;} 88%{opacity:.12;}
+    100%{transform:translate(-3px,-18px) scaleY(1.18);opacity:0;}
 }
 
 #main-nav {
@@ -1979,3 +2080,107 @@ body::after {
     box-shadow: var(--glow-turquoise);
 }
 .logo-slot.has-img { border-style: solid; border-color: var(--turquoise); }
+
+/* ============================================================
+   PHASE 6 — NEBULA NIGHTHAWKS SKIN
+   (overrides earlier rules by source order to re-skin the app)
+   ============================================================ */
+
+/* --- Handwriting for human-facing text; mono stays for tech labels --- */
+.tile-name, .score-name, .scoring-name, .matrix-name,
+.q-prompt, .round-prompt, .reveal-text, .round-answer-text,
+.team-name-input, .cat-name-input, .q-cat-name {
+    font-family: var(--font-hand);
+}
+.q-prompt { font-weight: 400; }
+.tile-name, .cat-name-input, .q-cat-name { font-weight: 700; letter-spacing: 0.5px; }
+
+/* --- Board big scene (main page only) --- */
+#screen-main { position: relative; }
+.board-scene {
+    position: absolute;
+    top: -28px; left: -36px; right: -36px;
+    height: 62vh;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+.haze-sun {
+    position: absolute;
+    top: 3%; right: 27%;
+    width: 220px; height: 220px;
+    filter: blur(1px);
+}
+.haze-sun .ring { position: absolute; border-radius: 50%; }
+.haze-sun .r1 { inset: 0; border: 1px solid rgba(232,196,104,0.26); filter: blur(1.5px); }
+.haze-sun .r2 { inset: 26px; border: 1.5px solid var(--gold); opacity: 0.5; }
+.haze-sun .r3 { inset: 52px; background: radial-gradient(circle, rgba(255,235,210,0.6), var(--gold) 55%, transparent 78%); filter: blur(6px); opacity: 0.8; }
+.haze-sun .r4 { inset: 82px; background: #FFF3DE; border-radius: 50%; box-shadow: 0 0 60px 22px rgba(232,196,104,.38); opacity: 0.85; }
+.board-scene .dunes {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 180px;
+}
+.board-wrap { position: relative; z-index: 1; }
+
+/* --- Category tiles: rounded, translucent, glow like bar signage --- */
+.category-tile {
+    border-radius: 20px;
+    background: linear-gradient(155deg, rgba(36,31,53,0.66), rgba(20,16,31,0.55));
+    backdrop-filter: blur(3px);
+    border-width: 1.5px;
+}
+.category-tile::after { border-radius: 50%; }
+.tile-name {
+    font-size: 20px;
+    text-shadow: 0 0 10px currentColor;
+}
+.tile-corner { display: none; }
+
+/* --- Panels: soften corners, keep HUD accents --- */
+.panel { border-radius: 10px; }
+.scoreboard, .side-panel, .q-stage, .round-item, .modal { border-radius: 12px; }
+
+/* --- Primary buttons: whiskey-gold gradient (scene accent) --- */
+.btn-primary {
+    background: linear-gradient(135deg, var(--violet-deep), var(--gold-d));
+    border-color: var(--gold);
+    color: #14101F;
+}
+.btn-primary:hover { box-shadow: var(--glow-gold); }
+.btn { border-radius: 24px; }
+.nav-btn { border-radius: 4px; }
+
+/* --- Scoreboard leader + points in gold --- */
+.score-points { font-family: var(--font-display); }
+.reveal-text { text-shadow: var(--glow-gold); }
+
+/* --- Matrix "on" cells adopt gold to match scoring accents --- */
+.matrix-cell { color: var(--gold); }
+.matrix-cell.on {
+    background: rgba(232,196,104,0.12);
+    border-color: var(--gold);
+    box-shadow: var(--glow-gold);
+}
+
+/* --- Round badge already gold; combined answers glow gold --- */
+.round-answer-row {
+    border-color: var(--gold);
+    background: linear-gradient(135deg, rgba(232,196,104,0.09), rgba(199,174,224,0.06));
+    box-shadow: var(--glow-gold);
+}
+
+/* --- Question standard image + reveal frames in gold --- */
+.q-standard-img { border-color: var(--gold); box-shadow: var(--glow-gold); }
+.answer-reveal {
+    border-color: var(--gold);
+    box-shadow: var(--glow-gold);
+    background: linear-gradient(135deg, rgba(232,196,104,0.1), rgba(199,174,224,0.07));
+}
+
+/* --- Reduced motion: still the vibe, no drift/spin --- */
+@media (prefers-reduced-motion: reduce) {
+    .atmo-fog .wisp, .smoke-stream .stream,
+    .song-visual.playing .song-disc,
+    .song-visual.playing .song-waves span { animation: none !important; }
+}

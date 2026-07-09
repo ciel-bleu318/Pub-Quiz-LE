@@ -24,6 +24,23 @@ const MainBoard = (function () {
         const state = GameState.get();
         root.innerHTML = '';
 
+        // Board-only "big scene": hazy double sun + dune silhouettes, the
+        // main page's dramatic moment layered behind the content.
+        const scene = document.createElement('div');
+        scene.className = 'board-scene';
+        scene.setAttribute('aria-hidden', 'true');
+        scene.innerHTML = `
+            <div class="haze-sun">
+                <div class="ring r1"></div><div class="ring r2"></div>
+                <div class="ring r3"></div><div class="ring r4"></div>
+            </div>
+            <svg class="dunes" viewBox="0 0 1200 190" preserveAspectRatio="none">
+                <path d="M0,120 Q150,60 320,100 T650,90 T980,110 T1200,80 L1200,190 L0,190 Z" fill="rgba(20,16,31,0.5)"/>
+                <path d="M0,150 Q200,100 420,140 T780,130 T1200,145 L1200,190 L0,190 Z" fill="rgba(20,16,31,0.8)"/>
+            </svg>
+        `;
+        root.appendChild(scene);
+
         const wrap = document.createElement('div');
         wrap.className = 'board-wrap';
 

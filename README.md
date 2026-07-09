@@ -34,17 +34,28 @@ Beenden: im Terminal `Strg + C` (Windows) bzw. `Ctrl + C` (macOS).
 
 Der rote **RESET**-Knopf im Header löscht beides vollständig.
 
+## Design
+
+Ästhetik: Moebius × Cowboy Bebop — Retro-Futurismus, Space-Western, Neo-Noir,
+analoge 90er-Anime-Nostalgie. Violetter Nachthimmel mit driftendem Rauch,
+Filmkorn, Scanlines und Vignette (durchgehend auf allen Screens), einer
+gedämpften Doppelsonne über Dünen auf der Hauptseite, Greifvogel-Logo mit
+aufsteigendem Zigarettenrauch. Schriften self-hosted in `fonts/` (Kalam für
+handschriftliche Texte, Rye für den Logo-Schriftzug, Special Elite für die
+Tagline) — keine CDN-Abhängigkeit außer der YouTube-IFrame-API.
+
 ## Projektstruktur
 
 ```
 index.html
 css/styles.css
+fonts/                Self-hosted Schriften (Kalam, Rye, Special Elite)
 js/
   MediaCache.js       Blob-Speicher über die Cache API (+ Migration, Prune)
-  GameState.js        Zustand/Persistenz, Validierung, Legacy-Migration
-  SetupManager.js     Modus 1 — Setup (Teams, Kategorien, Fragen)
-  MainBoard.js        Modus 2 — Hauptseite (Kacheln, Punktetafel)
-  QuestionRenderer.js Modus 3 — Frageseite (alle Typen, Punktevergabe)
-  UIController.js     Screen-Routing, Navigation
+  GameState.js        Zustand/Persistenz, Kategorie-Typen, Rundenlogik, Migration
+  SetupManager.js     Modus 1 — Setup (Logo, Teams, Kategorien, Fragen, Import)
+  MainBoard.js        Modus 2 — Hauptseite (Szene, Kacheln, Punktetafel)
+  QuestionRenderer.js Modus 3 — Frageseite (Einzel-/Rundenmodus, Punktevergabe)
+  UIController.js     Screen-Routing, Navigation, Header-Logo
   main.js             Einstiegspunkt (Migration → Init)
 ```
