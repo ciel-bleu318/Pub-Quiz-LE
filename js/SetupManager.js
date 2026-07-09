@@ -302,7 +302,23 @@ const SetupManager = (function () {
             addBtn.textContent = '+ ' + TYPE_LABELS[cat.type] + ' HINZUFÜGEN';
             addBtn.addEventListener('click', () => openQuestionModal(cat.id, cat.type, null));
             bar.appendChild(addBtn);
+
+            // Bulk import (text-based types only: standard / song)
+            if (cat.type === 'standard' || cat.type === 'song') {
+                const importBtn = document.createElement('button');
+                importBtn.className = 'btn';
+                importBtn.textContent = '⇩ MASSEN-IMPORT';
+                importBtn.addEventListener('click', () => {
+                    const panel = card.querySelector('.import-panel');
+                    if (panel) panel.classList.toggle('hidden');
+                });
+                bar.appendChild(importBtn);
+            }
             card.appendChild(bar);
+
+            if (cat.type === 'standard' || cat.type === 'song') {
+                card.appendChild(buildImportPanel(cat));
+            }
 
             list.appendChild(card);
         });
@@ -357,6 +373,134 @@ const SetupManager = (function () {
             case 'song':     return 'Antwort: ' + (q.answer || '(leer)');
             default: return '(unbekannt)';
         }
+    }
+
+    /* ---------- BULK IMPORT ---------- */
+    const IMPORT_HINTS = {
+        standard: `F: Wie heißt die Hauptstadt von Frankreich?\nA: Paris\n\nF: Wer malte die Mona Lisa?\nA: Leonardo da Vinci`,
+        song: `YT: https://www.youtube.com/watch?v=dQw4w9WgXcQ\nSTOP: 20\nA: Never Gonna Give You Up — Rick Astley\n\nYT: https://youtu.be/9bZkp7q19f0\nA: Gangnam Style — PSY`,
+    };
+
+    function buildImportPanel(cat) {
+        const panel = document.createElement('div');
+        panel.className = 'import-panel hidden';
+
+        const isSong = cat.type === 'song';
+        const hint = document.createElement('div');
+        hint.className = 'import-hint';
+        hint.innerHTML = isSong
+            ? `Ein Block pro Song. <code>YT:</code> YouTube-Link, <code>STOP:</code> Sekunden (optional, Standard 20), <code>A:</code> Antwort. Blöcke durch Leerzeile trennen. Audio-Dateien bleiben Einzel-Upload.`
+            : `Ein Block pro Frage: <code>F:</code> Frage, <code>A:</code> Antwort. Blöcke durch Leerzeile trennen.`;
+        panel.appendChild(hint);
+
+        const ta = document.createElement('textarea');
+        ta.className = 'import-textarea';
+        ta.rows = 8;
+        ta.placeholder = IMPORT_HINTS[cat.type];
+        panel.appendChild(ta);
+
+        const bar = document.createElement('div');
+        bar.className = 'import-actions';
+        const status = document.createElement('span');
+        status.className = 'import-status';
+        const doBtn = document.createElement('button');
+        doBtn.className = 'btn btn-primary';
+        doBtn.textContent = 'IMPORTIEREN';
+        doBtn.addEventListener('click', () => {
+            const { added, errors } = parseImport(ta.value, cat.type);
+            added.forEach(q => GameState.addQuestion(cat.id, q));
+            if (added.length > 0) {
+                ta.value = '';
+                renderCategories();
+                updateStatus();
+                // re-open this category's panel so the status stays visible
+                const newPanel = root.querySelectorAll('.category-card')[
+                    GameState.get().categories.findIndex(c => c.id === cat.id)
+                ]?.querySelector('.import-panel');
+                if (newPanel) {
+                    newPanel.classList.remove('hidden');
+                    const st = newPanel.querySelector('.import-status');
+                    if (st) {
+                        st.className = 'import-status ok';
+                        st.textContent = `${added.length} Frage(n) importiert` +
+                            (errors.length ? ` · ${errors.length} übersprungen` : '');
+                    }
+                }
+            } else {
+                status.className = 'import-status error';
+                status.textContent = errors.length
+                    ? `Nichts importiert · ${errors.length} Problem(e): ${errors[0]}`
+                    : 'Nichts erkannt — Format prüfen.';
+            }
+        });
+        bar.appendChild(doBtn);
+        bar.appendChild(status);
+        panel.appendChild(bar);
+
+        return panel;
+    }
+
+    // Parse a bulk block into question objects. Lenient: accepts blank-line- or
+    // contiguous-separated records, German/short prefixes, and continuation lines.
+    function parseImport(text, type) {
+        const primary = type === 'song' ? 'YT' : 'F';
+        const lines = String(text || '').split(/\r?\n/);
+        const records = [];
+        let cur = null;
+        const flush = () => { if (cur && Object.keys(cur).length) records.push(cur); cur = null; };
+
+        for (const raw of lines) {
+            const line = raw.trim();
+            if (!line) { continue; }
+            const m = line.match(/^([A-Za-zÄÖÜäöü]+)\s*[:.\-]\s*(.*)$/);
+            let key = m ? m[1].toUpperCase() : null;
+            let val = m ? m[2].trim() : line;
+            if (key === 'FRAGE') key = 'F';
+            else if (key === 'ANTWORT' || key === 'LÖSUNG' || key === 'LOESUNG') key = 'A';
+            else if (key === 'YOUTUBE' || key === 'LINK') key = 'YT';
+            else if (key === 'STOPP' || key === 'SEKUNDEN' || key === 'SEC') key = 'STOP';
+
+            const known = ['F', 'A', 'YT', 'STOP'];
+            if (key && known.includes(key)) {
+                if (key === primary && cur && cur[primary] !== undefined) flush();
+                if (!cur) cur = {};
+                cur[key] = val;
+            } else if (cur && cur[primary] !== undefined) {
+                // continuation of the primary field (e.g. a multi-line question)
+                cur[primary] += ' ' + line;
+            }
+            // else: stray line with no context → ignored
+        }
+        flush();
+
+        const added = [];
+        const errors = [];
+        records.forEach((r, i) => {
+            if (type === 'song') {
+                if (!r.YT) { errors.push(`Block ${i + 1}: kein YT-Link.`); return; }
+                if (!extractYouTubeId(r.YT)) { errors.push(`Block ${i + 1}: ungültiger YouTube-Link.`); return; }
+                if (!r.A) { errors.push(`Block ${i + 1}: keine Antwort (A:).`); return; }
+                const stop = parseInt(r.STOP, 10);
+                added.push({
+                    type: 'song',
+                    youtubeUrl: r.YT,
+                    audioMediaId: null,
+                    stopAfter: (Number.isFinite(stop) && stop >= 3) ? stop : 20,
+                    answer: r.A,
+                });
+            } else {
+                if (!r.F) { errors.push(`Block ${i + 1}: keine Frage (F:).`); return; }
+                if (!r.A) { errors.push(`Block ${i + 1}: keine Antwort (A:).`); return; }
+                added.push({ type: 'standard', question: r.F, answer: r.A, imageMediaId: null });
+            }
+        });
+        return { added, errors };
+    }
+
+    // Same YouTube-id check the renderer uses, for import validation.
+    function extractYouTubeId(url) {
+        const m = String(url).match(/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/)|youtu\.be\/)([\w-]{11})/);
+        return m ? m[1] : null;
     }
 
     /* ---------- QUESTION MODAL ---------- */
