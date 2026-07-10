@@ -84,6 +84,15 @@ const GameState = (function () {
         save();
     }
 
+    // Soft reset: restart the game (scores + played-status) without touching
+    // teams, categories, questions, avatars, logo, or settings.
+    function resetProgress() {
+        state.teams.forEach(t => { t.score = 0; });
+        state.categories.forEach(c => c.questions.forEach(q => { q.played = false; }));
+        state.currentPlay = null;
+        save();
+    }
+
     function get() { return state; }
 
     function uid() {
@@ -320,7 +329,7 @@ const GameState = (function () {
     }
 
     return {
-        get, save, load, reset,
+        get, save, load, reset, resetProgress,
         isRoundType, minQuestions, ROUND_SIZE,
         addAvatar, removeAvatar,
         addTeam, removeTeam, updateTeam, addPointsToTeams,

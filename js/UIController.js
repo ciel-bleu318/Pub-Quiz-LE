@@ -15,8 +15,15 @@ const UIController = (function () {
             btn.addEventListener('click', () => showScreen(btn.dataset.screen));
         });
 
+        document.getElementById('reset-progress-btn').addEventListener('click', () => {
+            if (confirm('Neue Runde starten? Alle Punkte werden auf 0 gesetzt und alle Fragen wieder als offen markiert. Teams, Kategorien, Fragen und Medien bleiben erhalten.')) {
+                GameState.resetProgress();
+                showScreen('main');
+            }
+        });
+
         document.getElementById('reset-btn').addEventListener('click', async () => {
-            if (confirm('ACHTUNG: Gesamten Spielstand und alle Daten löschen?')) {
+            if (confirm('ACHTUNG: Wirklich ALLES löschen — Teams, Kategorien, Fragen, Bilder, Audio, Logo? Das kann nicht rückgängig gemacht werden.')) {
                 await MediaCache.clear();
                 GameState.reset();
                 location.reload();
