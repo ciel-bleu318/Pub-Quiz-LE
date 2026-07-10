@@ -2184,3 +2184,42 @@ body {
     .song-visual.playing .song-disc,
     .song-visual.playing .song-waves span { animation: none !important; }
 }
+
+/* ============================================================
+   PHASE 6b — TWEAKS (green titles, compact centred tiles, time row)
+   ============================================================ */
+
+:root { --cool-green: #6FE0C0; }
+
+/* Board titles: cool green, no "//" prefix */
+.board-title {
+    color: var(--cool-green);
+    text-shadow: 0 0 10px rgba(111, 224, 192, 0.5), 0 0 22px rgba(111, 224, 192, 0.22);
+}
+
+/* Category grid: smaller, centred tiles with breathing room so the
+   sun/dune scene reads through when there are few categories */
+.category-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-start;
+    gap: 20px;
+    flex: 1;
+    padding-top: 6px;
+}
+.category-tile {
+    width: 190px;
+    min-height: 148px;
+    padding: 22px 18px 18px;
+    justify-content: flex-end;
+}
+.tile-icon {
+    font-size: 46px;
+    margin-bottom: 10px;
+}
+.tile-name { font-size: 18px; }
+
+/* Two-column form row (song start/stop time) */
+.form-row { display: flex; gap: 14px; }
+.form-row .form-group { flex: 1; }

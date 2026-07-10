@@ -492,9 +492,28 @@ const QuestionRenderer = (function () {
     }
 
     /* ---------- RATE DEN SONG (reusable player) ---------- */
+    // Resolve a song's clip window with backward compatibility: newer questions
+    // carry absolute startAt/stopAt; older ones only had stopAfter (from 0).
+    function songTiming(q) {
+        const startAt = Math.max(0, q.startAt ?? 0);
+        let stopAt = q.stopAt;
+        if (stopAt == null) stopAt = startAt + (q.stopAfter != null ? q.stopAfter : 20);
+        const duration = Math.max(1, Math.round(stopAt - startAt));
+        return { startAt, stopAt, duration };
+    }
+
+    function fmtClock(sec) {
+        sec = Math.max(0, Math.round(sec));
+        return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    }
+
     function buildSongPlayer(q) {
         const el = document.createElement('div');
         el.className = 'q-song';
+        const t = songTiming(q);
+        const rangeLabel = t.startAt > 0
+            ? `AUSSCHNITT ${fmtClock(t.startAt)}–${fmtClock(t.stopAt)} · ${t.duration}s`
+            : `AUTO-STOP NACH ${t.duration}s`;
         el.innerHTML = `
             <div class="song-visual">
                 <div class="song-disc">
@@ -505,7 +524,7 @@ const QuestionRenderer = (function () {
             </div>
             <div class="song-controls"></div>
             <div class="yt-host yt-hidden"></div>
-            <div class="song-status">BEREIT · AUTO-STOP NACH ${q.stopAfter}s</div>
+            <div class="song-status">BEREIT · ${rangeLabel}</div>
         `;
         const els = {
             playBtn: null,
@@ -528,15 +547,15 @@ const QuestionRenderer = (function () {
         stopAllMedia();
 
         const { playBtn, statusEl, visual, ytHost } = els;
+        const { startAt, duration } = songTiming(q);
         playBtn.disabled = true;
         playBtn.textContent = '■ LÄUFT';
         visual.classList.add('playing');
 
         let elapsed = 0;
-        const total = q.stopAfter;
         const tick = setInterval(() => {
             elapsed++;
-            const remaining = Math.max(0, total - elapsed);
+            const remaining = Math.max(0, duration - elapsed);
             statusEl.textContent = `WIEDERGABE · NOCH ${remaining}s`;
             if (remaining <= 0) clearInterval(tick);
         }, 1000);
@@ -555,11 +574,16 @@ const QuestionRenderer = (function () {
             MediaCache.resolve(q.audioMediaId).then(url => {
                 if (!url) { statusEl.textContent = 'AUDIO NICHT GEFUNDEN'; playBtn.disabled = false; clearInterval(tick); return; }
                 audioEl = new Audio(url);
-                audioEl.play().catch(err => { statusEl.textContent = 'AUDIO-FEHLER: ' + err.message; });
+                const seekAndPlay = () => {
+                    try { audioEl.currentTime = startAt; } catch (e) {}
+                    audioEl.play().catch(err => { statusEl.textContent = 'AUDIO-FEHLER: ' + err.message; });
+                };
+                if (startAt > 0) audioEl.addEventListener('loadedmetadata', seekAndPlay, { once: true });
+                else seekAndPlay();
                 ytStopTimer = setTimeout(() => {
                     if (audioEl) { audioEl.pause(); audioEl = null; }
                     finish();
-                }, total * 1000);
+                }, duration * 1000);
             });
         } else if (q.youtubeUrl) {
             const videoId = extractYouTubeId(q.youtubeUrl);
@@ -568,13 +592,13 @@ const QuestionRenderer = (function () {
                 ytHost.innerHTML = '<div></div>';
                 ytPlayer = new YT.Player(ytHost.firstChild, {
                     height: '1', width: '1', videoId,
-                    playerVars: { autoplay: 1, controls: 0 },
-                    events: { onReady: (e) => e.target.playVideo() }
+                    playerVars: { autoplay: 1, controls: 0, start: startAt },
+                    events: { onReady: (e) => { try { e.target.seekTo(startAt, true); } catch (er) {} e.target.playVideo(); } }
                 });
                 ytStopTimer = setTimeout(() => {
                     if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
                     finish();
-                }, total * 1000);
+                }, duration * 1000);
             }).catch(err => { statusEl.textContent = 'YOUTUBE-FEHLER: ' + err.message; playBtn.disabled = false; clearInterval(tick); });
         }
     }

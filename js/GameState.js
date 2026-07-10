@@ -23,7 +23,14 @@ const GameState = (function () {
     const ROUND_TYPES = ['standard', 'song'];
     const ROUND_SIZE = 3;
     function isRoundType(type) { return ROUND_TYPES.includes(type); }
-    function minQuestions(type) { return isRoundType(type) ? 9 : 10; }
+    // Per-type minimum question count.
+    const MIN_QUESTIONS = { standard: 9, song: 5, whereami: 5, barcode: 10 };
+    function minQuestions(type) {
+        return MIN_QUESTIONS[type] ?? (isRoundType(type) ? 9 : 10);
+    }
+
+    // Rotating default icons so each new category starts with a distinct emoji.
+    const DEFAULT_ICONS = ['🌌', '🎬', '🎵', '🌍', '🧪', '🎨', '📚', '⚡', '🍿', '🚀', '🎲', '🏆', '🦉', '🛸'];
 
     let state = load();
 
@@ -126,7 +133,7 @@ const GameState = (function () {
         const c = {
             id: uid(),
             name: 'Neue Kategorie',
-            icon: '🌌',
+            icon: DEFAULT_ICONS[state.categories.length % DEFAULT_ICONS.length],
             type,
             questions: []
         };

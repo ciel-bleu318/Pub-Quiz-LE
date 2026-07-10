@@ -13,6 +13,23 @@ const SetupManager = (function () {
         barcode:  'BILD + MC',   // generic image + multiple choice (incl. movie barcode)
     };
 
+    // Time helpers — accept "m:ss" (e.g. 1:23) or plain seconds; format back to m:ss.
+    function parseTime(v) {
+        if (v == null) return null;
+        const s = String(v).trim();
+        if (!s) return null;
+        if (s.includes(':')) {
+            const [m, sec] = s.split(':');
+            return (parseInt(m, 10) || 0) * 60 + (parseInt(sec, 10) || 0);
+        }
+        const n = parseInt(s, 10);
+        return Number.isFinite(n) ? n : null;
+    }
+    function formatTime(sec) {
+        sec = Math.max(0, Math.round(sec || 0));
+        return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    }
+
     // A media "slot" value is { mediaId } (already cached) or { blob } (pending upload).
     // persistSlot writes a pending blob to the cache and returns its id.
     async function persistSlot(val) {
@@ -280,6 +297,8 @@ const SetupManager = (function () {
             iconInput.className = 'cat-icon-input';
             iconInput.value = cat.icon;
             iconInput.maxLength = 2;
+            iconInput.title = 'Emoji-Icon der Kategorie — anklicken und ändern';
+            iconInput.setAttribute('aria-label', 'Emoji-Icon');
             iconInput.addEventListener('input', () => {
                 GameState.updateCategory(cat.id, { icon: iconInput.value });
             });
@@ -430,7 +449,7 @@ const SetupManager = (function () {
     /* ---------- BULK IMPORT ---------- */
     const IMPORT_HINTS = {
         standard: `F: Wie heißt die Hauptstadt von Frankreich?\nA: Paris\n\nF: Wer malte die Mona Lisa?\nA: Leonardo da Vinci`,
-        song: `YT: https://www.youtube.com/watch?v=dQw4w9WgXcQ\nSTOP: 20\nA: Never Gonna Give You Up — Rick Astley\n\nYT: https://youtu.be/9bZkp7q19f0\nA: Gangnam Style — PSY`,
+        song: `YT: https://www.youtube.com/watch?v=dQw4w9WgXcQ\nSTART: 0:00\nSTOP: 0:20\nA: Never Gonna Give You Up — Rick Astley\n\nYT: https://youtu.be/9bZkp7q19f0\nA: Gangnam Style — PSY`,
     };
 
     function buildImportPanel(cat) {
@@ -441,7 +460,7 @@ const SetupManager = (function () {
         const hint = document.createElement('div');
         hint.className = 'import-hint';
         hint.innerHTML = isSong
-            ? `Ein Block pro Song. <code>YT:</code> YouTube-Link, <code>STOP:</code> Sekunden (optional, Standard 20), <code>A:</code> Antwort. Blöcke durch Leerzeile trennen. Audio-Dateien bleiben Einzel-Upload.`
+            ? `Ein Block pro Song. <code>YT:</code> YouTube-Link, <code>START:</code> Startzeit (optional, m:ss oder Sek.), <code>STOP:</code> Stoppzeit (optional, Standard 0:20), <code>A:</code> Antwort. Blöcke durch Leerzeile trennen. Audio-Dateien bleiben Einzel-Upload.`
             : `Ein Block pro Frage: <code>F:</code> Frage, <code>A:</code> Antwort. Blöcke durch Leerzeile trennen.`;
         panel.appendChild(hint);
 
@@ -510,9 +529,10 @@ const SetupManager = (function () {
             if (key === 'FRAGE') key = 'F';
             else if (key === 'ANTWORT' || key === 'LÖSUNG' || key === 'LOESUNG') key = 'A';
             else if (key === 'YOUTUBE' || key === 'LINK') key = 'YT';
-            else if (key === 'STOPP' || key === 'SEKUNDEN' || key === 'SEC') key = 'STOP';
+            else if (key === 'STOPP' || key === 'SEKUNDEN' || key === 'SEC' || key === 'ENDE') key = 'STOP';
+            else if (key === 'STARTZEIT' || key === 'BEGINN' || key === 'VON') key = 'START';
 
-            const known = ['F', 'A', 'YT', 'STOP'];
+            const known = ['F', 'A', 'YT', 'START', 'STOP'];
             if (key && known.includes(key)) {
                 if (key === primary && cur && cur[primary] !== undefined) flush();
                 if (!cur) cur = {};
@@ -532,12 +552,15 @@ const SetupManager = (function () {
                 if (!r.YT) { errors.push(`Block ${i + 1}: kein YT-Link.`); return; }
                 if (!extractYouTubeId(r.YT)) { errors.push(`Block ${i + 1}: ungültiger YouTube-Link.`); return; }
                 if (!r.A) { errors.push(`Block ${i + 1}: keine Antwort (A:).`); return; }
-                const stop = parseInt(r.STOP, 10);
+                const startAt = Math.max(0, parseTime(r.START) ?? 0);
+                let stopAt = parseTime(r.STOP);
+                if (stopAt == null || stopAt <= startAt) stopAt = startAt + 20;
                 added.push({
                     type: 'song',
                     youtubeUrl: r.YT,
                     audioMediaId: null,
-                    stopAfter: (Number.isFinite(stop) && stop >= 3) ? stop : 20,
+                    startAt,
+                    stopAt,
                     answer: r.A,
                 });
             } else {
@@ -924,9 +947,15 @@ const SetupManager = (function () {
                     <div id="s-preview" style="margin-top:8px;"></div>
                 </div>
             </div>
-            <div class="form-group">
-                <label>AUTO-STOP NACH (SEKUNDEN)</label>
-                <input type="number" id="s-stop" min="3" max="120" value="${existing?.stopAfter || 20}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>STARTZEIT (m:ss oder Sek.)</label>
+                    <input type="text" id="s-start" value="${formatTime(existing?.startAt ?? 0)}" placeholder="0:00">
+                </div>
+                <div class="form-group">
+                    <label>STOPPZEIT (m:ss oder Sek.)</label>
+                    <input type="text" id="s-stop" value="${formatTime(existing?.stopAt ?? existing?.stopAfter ?? 20)}" placeholder="0:20">
+                </div>
             </div>
             <div class="form-group">
                 <label>ANTWORT (Songtitel / Künstler)</label>
@@ -966,15 +995,19 @@ const SetupManager = (function () {
         return {
             async collect() {
                 const yt = container.querySelector('#s-yt').value.trim();
-                const stopAfter = parseInt(container.querySelector('#s-stop').value, 10) || 20;
+                const startAt = Math.max(0, parseTime(container.querySelector('#s-start').value) ?? 0);
+                let stopAt = parseTime(container.querySelector('#s-stop').value);
+                if (stopAt == null) stopAt = startAt + 20;
                 const answer = container.querySelector('#s-answer').value.trim();
                 if (!answer) { alert('Antwort erforderlich.'); return null; }
                 if (!yt && !audioSlot) { alert('YouTube-Link oder Audio-Datei erforderlich.'); return null; }
+                if (stopAt <= startAt) { alert('Stoppzeit muss nach der Startzeit liegen.'); return null; }
                 const audioMediaId = await persistSlot(audioSlot);
                 return {
                     youtubeUrl: yt || null,
                     audioMediaId: audioMediaId || null,
-                    stopAfter,
+                    startAt,
+                    stopAt,
                     answer,
                 };
             }

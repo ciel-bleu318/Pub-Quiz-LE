@@ -51,7 +51,7 @@ const MainBoard = (function () {
         const heading = document.createElement('div');
         heading.className = 'board-heading';
         heading.innerHTML = `
-            <h2 class="board-title">// KATEGORIEN</h2>
+            <h2 class="board-title">KATEGORIEN</h2>
             <span class="board-sub">Kategorie wählen → zufällige Frage ziehen</span>
         `;
         gridSection.appendChild(heading);
@@ -130,7 +130,7 @@ const MainBoard = (function () {
 
         const title = document.createElement('h2');
         title.className = 'board-title';
-        title.textContent = '// PUNKTETAFEL';
+        title.textContent = 'PUNKTETAFEL';
         side.appendChild(title);
 
         // Sort by score desc for dramatic effect
