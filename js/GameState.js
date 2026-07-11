@@ -20,14 +20,11 @@ const GameState = (function () {
 
     // Round-mode types are played 3 at a time (teams answer on paper, combined
     // reveal at the end). Single-mode types are played one question at a time.
-    const ROUND_TYPES = ['standard', 'song'];
+    const ROUND_TYPES = ['standard', 'song', 'imageguess'];
     const ROUND_SIZE = 3;
     function isRoundType(type) { return ROUND_TYPES.includes(type); }
-    // Per-type minimum question count.
-    const MIN_QUESTIONS = { standard: 9, song: 5, whereami: 5, barcode: 10 };
-    function minQuestions(type) {
-        return MIN_QUESTIONS[type] ?? (isRoundType(type) ? 9 : 10);
-    }
+    // Minimum question count per category (all types).
+    function minQuestions(type) { return 3; }
 
     // Rotating default icons so each new category starts with a distinct emoji.
     const DEFAULT_ICONS = ['🌌', '🎬', '🎵', '🌍', '🧪', '🎨', '📚', '⚡', '🍿', '🚀', '🎲', '🏆', '🦉', '🛸'];
@@ -135,6 +132,11 @@ const GameState = (function () {
             if (t) t.score += points;
         });
         save();
+    }
+    // Manual in-game correction of a single team's score (clamped at 0).
+    function adjustTeamScore(id, delta) {
+        const t = state.teams.find(x => x.id === id);
+        if (t) { t.score = Math.max(0, t.score + delta); save(); }
     }
 
     /* ---------- CATEGORIES ---------- */
@@ -261,6 +263,7 @@ const GameState = (function () {
             if (Array.isArray(q.images)) q.images.forEach(m => { if (m) ids.push(m); });
             if (q.imageMediaId) ids.push(q.imageMediaId);
             if (q.audioMediaId) ids.push(q.audioMediaId);
+            if (q.explanationImageMediaId) ids.push(q.explanationImageMediaId);
         }));
         return ids;
     }
@@ -332,7 +335,7 @@ const GameState = (function () {
         get, save, load, reset, resetProgress,
         isRoundType, minQuestions, ROUND_SIZE,
         addAvatar, removeAvatar,
-        addTeam, removeTeam, updateTeam, addPointsToTeams,
+        addTeam, removeTeam, updateTeam, addPointsToTeams, adjustTeamScore,
         addCategory, removeCategory, updateCategory,
         addQuestion, updateQuestion, removeQuestion,
         markQuestionPlayed, markQuestionsPlayed,

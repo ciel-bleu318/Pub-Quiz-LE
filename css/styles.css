@@ -989,7 +989,7 @@ body {
 
 .board-wrap {
     display: grid;
-    grid-template-columns: 1fr 340px;
+    grid-template-columns: 1fr 400px;
     gap: 28px;
     min-height: calc(100vh - 180px);
 }
@@ -1196,8 +1196,8 @@ body {
 }
 .score-row {
     display: grid;
-    grid-template-columns: 26px 52px 1fr auto;
-    gap: 12px;
+    grid-template-columns: 22px 46px 1fr auto;
+    gap: 10px;
     align-items: center;
     padding: 10px 12px;
     background: var(--bg-panel-2);
@@ -1221,7 +1221,7 @@ body {
     text-shadow: var(--glow-gold);
 }
 .score-avatar {
-    width: 52px; height: 52px;
+    width: 46px; height: 46px;
     border-radius: 50%;
     border: 1.5px solid var(--line-bright);
     background-size: cover;
@@ -1230,7 +1230,7 @@ body {
     align-items: center;
     justify-content: center;
     color: var(--text-faint);
-    font-size: 20px;
+    font-size: 18px;
 }
 .score-row.leader .score-avatar {
     border-color: var(--gold);
@@ -2223,3 +2223,69 @@ body {
 /* Two-column form row (song start/stop time) */
 .form-row { display: flex; gap: 14px; }
 .form-row .form-group { flex: 1; }
+
+/* ============================================================
+   PHASE 8 — EXPLANATIONS, IMAGE-GUESS, IN-GAME SCORE EDIT
+   ============================================================ */
+
+/* Explanation fields in the question modal */
+.explanation-fields {
+    margin-top: 6px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line-bright);
+}
+.explanation-fields .expl-text { min-height: 60px; }
+
+/* Explanation shown at reveal time (question page) */
+.answer-explanation {
+    margin: 14px auto 0;
+    max-width: 900px;
+    padding: 14px 20px;
+    border: 1px solid var(--violet);
+    border-left: 3px solid var(--violet);
+    border-radius: 6px;
+    background: rgba(199, 174, 224, 0.07);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    text-align: center;
+}
+.expl-text-view {
+    font-family: var(--font-hand);
+    font-size: 18px;
+    color: var(--text);
+    line-height: 1.45;
+}
+.expl-img-view {
+    max-width: 100%;
+    max-height: 300px;
+    border: 1px solid var(--line-bright);
+    border-radius: 4px;
+}
+
+/* In-game score adjustment on the scoreboard */
+.score-adjust {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.score-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid var(--line-bright);
+    background: var(--bg-deep);
+    color: var(--text-dim);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    padding: 0;
+}
+.score-btn:hover { color: var(--gold); border-color: var(--gold); box-shadow: var(--glow-gold); }
+.score-adjust .score-points { min-width: 30px; text-align: center; }

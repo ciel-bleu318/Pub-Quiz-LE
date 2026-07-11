@@ -25,8 +25,10 @@ const QuestionRenderer = (function () {
     let selectedTeams = new Set();
 
     // Round-mode state
-    let roundRevealed = 1;    // how many of the round's questions are shown
-    let roundScores = {};     // { [questionId]: Set(teamId) }
+    let roundPhase = 'asking'; // 'asking' | 'seq' | 'all'
+    let roundIndex = 0;        // during asking: which question is shown
+    let seqIndex = 0;          // during sequential reveal: which answer is shown
+    let roundScores = {};      // { [questionId]: Set(teamId) }
 
     // Audio / YT runtime (shared; only one plays at a time)
     let audioEl = null;
@@ -60,7 +62,9 @@ const QuestionRenderer = (function () {
         revealedStep = 0;
         selectedOption = -1;
         selectedTeams = new Set();
-        roundRevealed = 1;
+        roundPhase = 'asking';
+        roundIndex = 0;
+        seqIndex = 0;
         roundScores = {};
         questions.forEach(q => { roundScores[q.id] = new Set(); });
         stopAllMedia();
@@ -157,6 +161,8 @@ const QuestionRenderer = (function () {
             answerArea.appendChild(btn);
         } else {
             answerArea.appendChild(buildAnswerReveal(q.answer));
+            const ex = buildExplanation(q);
+            if (ex) answerArea.appendChild(ex);
             renderSingleScoring(scoringArea);
         }
     }
@@ -214,64 +220,57 @@ const QuestionRenderer = (function () {
     }
 
     /* ============================================================
-       ROUND MODE
+       ROUND MODE — questions shown one at a time; after the last,
+       the quizmaster picks sequential or all-at-once reveal (each
+       answer shown together with its question), then the matrix.
        ============================================================ */
     function renderRoundBody(body) {
         body.innerHTML = '';
-
-        // Stage: revealed questions stacked
         const stage = document.createElement('div');
         stage.className = 'q-stage round-stage';
         body.appendChild(stage);
-        for (let i = 0; i < roundRevealed && i < questions.length; i++) {
-            stage.appendChild(buildRoundItem(questions[i], i));
-        }
 
-        // Controls: reveal next question, or reveal all answers
         const controls = document.createElement('div');
         controls.className = 'q-answer-area';
         body.appendChild(controls);
 
-        if (roundRevealed < questions.length) {
-            const nextBtn = document.createElement('button');
-            nextBtn.className = 'btn btn-secondary big';
-            nextBtn.textContent = `▸ NÄCHSTE FRAGE (${roundRevealed + 1}/${questions.length})`;
-            nextBtn.onclick = () => { roundRevealed++; renderRoundBody(body); };
-            controls.appendChild(nextBtn);
-        } else if (!answerRevealed) {
-            const revealBtn = document.createElement('button');
-            revealBtn.className = 'btn btn-primary big';
-            revealBtn.textContent = '★ ALLE ANTWORTEN AUFDECKEN';
-            revealBtn.onclick = () => {
-                answerRevealed = true;
-                stopAllMedia();
-                renderRoundBody(body);
-            };
-            controls.appendChild(revealBtn);
-        } else {
-            // Combined answers
-            const answersWrap = document.createElement('div');
-            answersWrap.className = 'round-answers';
-            questions.forEach((q, i) => {
-                const row = document.createElement('div');
-                row.className = 'round-answer-row';
-                row.innerHTML = `
-                    <span class="round-answer-num">F${i + 1}</span>
-                    <span class="round-answer-text">${escapeHtml(q.answer)}</span>
-                `;
-                answersWrap.appendChild(row);
-            });
-            controls.appendChild(answersWrap);
-        }
-
-        // Scoring matrix (once revealed)
         const scoring = document.createElement('div');
         scoring.className = 'q-scoring';
         body.appendChild(scoring);
-        if (answerRevealed) renderRoundMatrix(scoring);
+
+        if (roundPhase === 'asking') {
+            // Only the current question is visible.
+            stage.appendChild(buildRoundItem(questions[roundIndex], roundIndex, false));
+            if (roundIndex < questions.length - 1) {
+                const nextBtn = mkBtn('btn btn-secondary big', `▸ NÄCHSTE FRAGE (${roundIndex + 2}/${questions.length})`, () => {
+                    stopAllMedia(); roundIndex++; renderRoundBody(body);
+                });
+                controls.appendChild(nextBtn);
+            } else {
+                controls.appendChild(mkBtn('btn btn-primary big', '▸ SEQUENZIELL AUFLÖSEN', () => {
+                    stopAllMedia(); roundPhase = 'seq'; seqIndex = 0; renderRoundBody(body);
+                }));
+                controls.appendChild(mkBtn('btn btn-secondary big', '⚏ GLEICHZEITIG AUFLÖSEN', () => {
+                    stopAllMedia(); roundPhase = 'all'; renderRoundBody(body);
+                }));
+            }
+        } else if (roundPhase === 'seq') {
+            // One question + its answer at a time.
+            stage.appendChild(buildRoundItem(questions[seqIndex], seqIndex, true));
+            if (seqIndex < questions.length - 1) {
+                controls.appendChild(mkBtn('btn btn-secondary big', `▸ NÄCHSTE AUFLÖSUNG (${seqIndex + 2}/${questions.length})`, () => {
+                    stopAllMedia(); seqIndex++; renderRoundBody(body);
+                }));
+            } else {
+                renderRoundMatrix(scoring);
+            }
+        } else { // 'all'
+            questions.forEach((q, i) => stage.appendChild(buildRoundItem(q, i, true)));
+            renderRoundMatrix(scoring);
+        }
     }
 
-    function buildRoundItem(q, idx) {
+    function buildRoundItem(q, idx, showAnswer) {
         const item = document.createElement('div');
         item.className = 'round-item';
         const label = document.createElement('div');
@@ -281,8 +280,14 @@ const QuestionRenderer = (function () {
 
         if (q.type === 'song') {
             item.appendChild(buildSongPlayer(q));
+        } else if (q.type === 'imageguess') {
+            const img = document.createElement('img');
+            img.className = 'round-item-img';
+            img.alt = '';
+            MediaCache.applySrc(img, q.imageMediaId);
+            item.appendChild(img);
         } else {
-            // standard (and any other prompt-based type) — optional image
+            // standard (prompt-based) — optional image above the prompt
             if (q.imageMediaId) {
                 const img = document.createElement('img');
                 img.className = 'round-item-img';
@@ -295,7 +300,42 @@ const QuestionRenderer = (function () {
             prompt.textContent = q.question;
             item.appendChild(prompt);
         }
+
+        if (showAnswer) {
+            item.appendChild(buildAnswerReveal(q.answer));
+            const ex = buildExplanation(q);
+            if (ex) item.appendChild(ex);
+        }
         return item;
+    }
+
+    function mkBtn(cls, text, onclick) {
+        const b = document.createElement('button');
+        b.className = cls;
+        b.textContent = text;
+        b.onclick = onclick;
+        return b;
+    }
+
+    // Optional answer explanation (text and/or image), shown at reveal time.
+    function buildExplanation(q) {
+        if (!q.explanation && !q.explanationImageMediaId) return null;
+        const el = document.createElement('div');
+        el.className = 'answer-explanation';
+        if (q.explanation) {
+            const t = document.createElement('div');
+            t.className = 'expl-text-view';
+            t.textContent = q.explanation;
+            el.appendChild(t);
+        }
+        if (q.explanationImageMediaId) {
+            const img = document.createElement('img');
+            img.className = 'expl-img-view';
+            img.alt = '';
+            MediaCache.applySrc(img, q.explanationImageMediaId);
+            el.appendChild(img);
+        }
+        return el;
     }
 
     function renderRoundMatrix(area) {

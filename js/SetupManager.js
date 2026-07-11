@@ -7,10 +7,11 @@ const SetupManager = (function () {
     let selectedAvatarTarget = null; // teamId currently waiting for an avatar pick
 
     const TYPE_LABELS = {
-        standard: 'STANDARD',
-        song:     'RATE DEN SONG',
-        whereami: 'WO BIN ICH?',
-        barcode:  'BILD + MC',   // generic image + multiple choice (incl. movie barcode)
+        standard:   'STANDARD',
+        song:       'RATE DEN SONG',
+        imageguess: 'BILD RATEN',  // image only, free-text answer, round mode
+        whereami:   'WO BIN ICH?',
+        barcode:    'BILD + MC',   // generic image + multiple choice (incl. movie barcode)
     };
 
     // Time helpers — accept "m:ss" (e.g. 1:23) or plain seconds; format back to m:ss.
@@ -79,6 +80,38 @@ const SetupManager = (function () {
         });
         render();
         return { get: () => slot };
+    }
+
+    // Optional answer-explanation fields (text + image), appended to a question
+    // form. Shown together with the answer when the question is revealed.
+    function appendExplanationFields(container, existing) {
+        const wrap = document.createElement('div');
+        wrap.className = 'explanation-fields';
+        wrap.innerHTML = `
+            <div class="form-group">
+                <label>ERKLÄRUNG ZUR ANTWORT (optional)</label>
+                <textarea class="expl-text" placeholder="Zusatzinfo, wird beim Auflösen mit angezeigt">${existing?.explanation || ''}</textarea>
+            </div>
+            <div class="form-group">
+                <label>ERKLÄRUNGS-BILD (optional)</label>
+                <div class="single-image-slot expl-img"></div>
+            </div>
+        `;
+        container.appendChild(wrap);
+        const slot = makeSingleImageSlot(
+            wrap.querySelector('.expl-img'),
+            existing?.explanationImageMediaId ? { mediaId: existing.explanationImageMediaId } : null
+        );
+        return {
+            async collect() {
+                const explanation = wrap.querySelector('.expl-text').value.trim();
+                const explanationImageMediaId = await persistSlot(slot.get());
+                return {
+                    explanation: explanation || null,
+                    explanationImageMediaId: explanationImageMediaId || null,
+                };
+            }
+        };
     }
 
     function render() {
@@ -374,8 +407,9 @@ const SetupManager = (function () {
             addBtn.addEventListener('click', () => openQuestionModal(cat.id, cat.type, null));
             bar.appendChild(addBtn);
 
-            // Bulk import (text-based types only: standard / song)
-            if (cat.type === 'standard' || cat.type === 'song') {
+            // Bulk import: text-based (standard / song) or image files (imageguess)
+            const importable = cat.type === 'standard' || cat.type === 'song' || cat.type === 'imageguess';
+            if (importable) {
                 const importBtn = document.createElement('button');
                 importBtn.className = 'btn';
                 importBtn.textContent = '⇩ MASSEN-IMPORT';
@@ -387,7 +421,7 @@ const SetupManager = (function () {
             }
             card.appendChild(bar);
 
-            if (cat.type === 'standard' || cat.type === 'song') {
+            if (importable) {
                 card.appendChild(buildImportPanel(cat));
             }
 
@@ -407,10 +441,11 @@ const SetupManager = (function () {
         const tag = document.createElement('span');
         tag.className = 'question-type-tag qt-' + q.type;
         tag.textContent = ({
-            standard: 'STANDARD',
-            whereami: 'WO BIN ICH?',
-            barcode:  'BILD + MC',
-            song:     'SONG',
+            standard:   'STANDARD',
+            whereami:   'WO BIN ICH?',
+            barcode:    'BILD + MC',
+            song:       'SONG',
+            imageguess: 'BILD RATEN',
         })[q.type] || q.type.toUpperCase();
 
         const prev = document.createElement('span');
@@ -438,21 +473,79 @@ const SetupManager = (function () {
 
     function questionPreviewText(q) {
         switch (q.type) {
-            case 'standard': return q.question || '(leer)';
-            case 'whereami': return 'Antwort: ' + (q.answer || '(leer)');
-            case 'barcode':  return 'Antwort: ' + (q.answer || '(leer)');
-            case 'song':     return 'Antwort: ' + (q.answer || '(leer)');
+            case 'standard':   return q.question || '(leer)';
+            case 'whereami':   return 'Antwort: ' + (q.answer || '(leer)');
+            case 'barcode':    return 'Antwort: ' + (q.answer || '(leer)');
+            case 'song':       return 'Antwort: ' + (q.answer || '(leer)');
+            case 'imageguess': return 'Bild → ' + (q.answer || '(leer)');
             default: return '(unbekannt)';
         }
     }
 
     /* ---------- BULK IMPORT ---------- */
     const IMPORT_HINTS = {
-        standard: `F: Wie heißt die Hauptstadt von Frankreich?\nA: Paris\n\nF: Wer malte die Mona Lisa?\nA: Leonardo da Vinci`,
-        song: `YT: https://www.youtube.com/watch?v=dQw4w9WgXcQ\nSTART: 0:00\nSTOP: 0:20\nA: Never Gonna Give You Up — Rick Astley\n\nYT: https://youtu.be/9bZkp7q19f0\nA: Gangnam Style — PSY`,
+        standard: `F: Wie heißt die Hauptstadt von Frankreich?\nA: Paris\nE: (optional) seit 508 n. Chr. Hauptstadt\n\nF: Wer malte die Mona Lisa?\nA: Leonardo da Vinci`,
+        song: `YT: https://www.youtube.com/watch?v=dQw4w9WgXcQ\nSTART: 0:00\nSTOP: 0:20\nA: Never Gonna Give You Up — Rick Astley\nE: (optional) Rickroll-Klassiker von 1987\n\nYT: https://youtu.be/9bZkp7q19f0\nA: Gangnam Style — PSY`,
     };
 
+    // Image-guess categories import by uploading image files; the answer is
+    // each file's name without extension.
+    function buildImageImportPanel(cat) {
+        const panel = document.createElement('div');
+        panel.className = 'import-panel hidden';
+
+        const hint = document.createElement('div');
+        hint.className = 'import-hint';
+        hint.innerHTML = `Mehrere Bilder auswählen — pro Bild wird eine Frage angelegt, die <b>Antwort ist der Dateiname ohne Endung</b> (z. B. <code>Eiffelturm.jpg</code> → Antwort „Eiffelturm").`;
+        panel.appendChild(hint);
+
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        panel.appendChild(input);
+
+        const bar = document.createElement('div');
+        bar.className = 'import-actions';
+        const status = document.createElement('span');
+        status.className = 'import-status';
+        bar.appendChild(status);
+        panel.appendChild(bar);
+
+        input.addEventListener('change', async () => {
+            const files = [...input.files].filter(f => f.type.startsWith('image/'));
+            if (!files.length) return;
+            status.className = 'import-status';
+            status.textContent = 'Importiere …';
+            let n = 0;
+            for (const file of files) {
+                const mediaId = await MediaCache.put(file);
+                const answer = file.name.replace(/\.[^.]+$/, '').trim() || 'Unbenannt';
+                GameState.addQuestion(cat.id, {
+                    type: 'imageguess', imageMediaId: mediaId, answer,
+                    explanation: null, explanationImageMediaId: null,
+                });
+                n++;
+            }
+            input.value = '';
+            renderCategories();
+            updateStatus();
+            const newPanel = root.querySelectorAll('.category-card')[
+                GameState.get().categories.findIndex(c => c.id === cat.id)
+            ]?.querySelector('.import-panel');
+            if (newPanel) {
+                newPanel.classList.remove('hidden');
+                const st = newPanel.querySelector('.import-status');
+                if (st) { st.className = 'import-status ok'; st.textContent = `${n} Bild(er) importiert`; }
+            }
+        });
+
+        return panel;
+    }
+
     function buildImportPanel(cat) {
+        if (cat.type === 'imageguess') return buildImageImportPanel(cat);
+
         const panel = document.createElement('div');
         panel.className = 'import-panel hidden';
 
@@ -460,8 +553,8 @@ const SetupManager = (function () {
         const hint = document.createElement('div');
         hint.className = 'import-hint';
         hint.innerHTML = isSong
-            ? `Ein Block pro Song. <code>YT:</code> YouTube-Link, <code>START:</code> Startzeit (optional, m:ss oder Sek.), <code>STOP:</code> Stoppzeit (optional, Standard 0:20), <code>A:</code> Antwort. Blöcke durch Leerzeile trennen. Audio-Dateien bleiben Einzel-Upload.`
-            : `Ein Block pro Frage: <code>F:</code> Frage, <code>A:</code> Antwort. Blöcke durch Leerzeile trennen.`;
+            ? `Ein Block pro Song. <code>YT:</code> YouTube-Link, <code>START:</code> Startzeit (optional, m:ss oder Sek.), <code>STOP:</code> Stoppzeit (optional, Standard 0:20), <code>A:</code> Antwort, <code>E:</code> Erklärung (optional). Blöcke durch Leerzeile trennen. Audio-Dateien bleiben Einzel-Upload.`
+            : `Ein Block pro Frage: <code>F:</code> Frage, <code>A:</code> Antwort, <code>E:</code> Erklärung (optional). Blöcke durch Leerzeile trennen.`;
         panel.appendChild(hint);
 
         const ta = document.createElement('textarea');
@@ -531,8 +624,9 @@ const SetupManager = (function () {
             else if (key === 'YOUTUBE' || key === 'LINK') key = 'YT';
             else if (key === 'STOPP' || key === 'SEKUNDEN' || key === 'SEC' || key === 'ENDE') key = 'STOP';
             else if (key === 'STARTZEIT' || key === 'BEGINN' || key === 'VON') key = 'START';
+            else if (key === 'ERKLÄRUNG' || key === 'ERKLAERUNG' || key === 'INFO') key = 'E';
 
-            const known = ['F', 'A', 'YT', 'START', 'STOP'];
+            const known = ['F', 'A', 'E', 'YT', 'START', 'STOP'];
             if (key && known.includes(key)) {
                 if (key === primary && cur && cur[primary] !== undefined) flush();
                 if (!cur) cur = {};
@@ -562,11 +656,16 @@ const SetupManager = (function () {
                     startAt,
                     stopAt,
                     answer: r.A,
+                    explanation: r.E || null,
+                    explanationImageMediaId: null,
                 });
             } else {
                 if (!r.F) { errors.push(`Block ${i + 1}: keine Frage (F:).`); return; }
                 if (!r.A) { errors.push(`Block ${i + 1}: keine Antwort (A:).`); return; }
-                added.push({ type: 'standard', question: r.F, answer: r.A, imageMediaId: null });
+                added.push({
+                    type: 'standard', question: r.F, answer: r.A, imageMediaId: null,
+                    explanation: r.E || null, explanationImageMediaId: null,
+                });
             }
         });
         return { added, errors };
@@ -651,10 +750,11 @@ const SetupManager = (function () {
     /* ---------- FORM BUILDERS ---------- */
     function buildForm(type, existing, container) {
         switch (type) {
-            case 'standard': return buildStandardForm(existing, container);
-            case 'whereami': return buildWhereAmIForm(existing, container);
-            case 'barcode':  return buildBarcodeForm(existing, container);
-            case 'song':     return buildSongForm(existing, container);
+            case 'standard':   return buildStandardForm(existing, container);
+            case 'whereami':   return buildWhereAmIForm(existing, container);
+            case 'barcode':    return buildBarcodeForm(existing, container);
+            case 'song':       return buildSongForm(existing, container);
+            case 'imageguess': return buildImageGuessForm(existing, container);
         }
     }
 
@@ -677,13 +777,42 @@ const SetupManager = (function () {
             container.querySelector('#f-img'),
             existing?.imageMediaId ? { mediaId: existing.imageMediaId } : null
         );
+        const expl = appendExplanationFields(container, existing);
         return {
             async collect() {
                 const question = container.querySelector('#f-question').value.trim();
                 const answer = container.querySelector('#f-answer').value.trim();
                 if (!question || !answer) { alert('Frage und Antwort erforderlich.'); return null; }
                 const imageMediaId = await persistSlot(imgSlot.get());
-                return { question, answer, imageMediaId: imageMediaId || null };
+                return { question, answer, imageMediaId: imageMediaId || null, ...(await expl.collect()) };
+            }
+        };
+    }
+
+    function buildImageGuessForm(existing, container) {
+        container.innerHTML = `
+            <p class="modal-hint">Nur ein Bild — kein Fragetext. Die Teams raten, was zu sehen ist.</p>
+            <div class="form-group">
+                <label>BILD</label>
+                <div class="single-image-slot" id="ig-img"></div>
+            </div>
+            <div class="form-group">
+                <label>ANTWORT</label>
+                <input type="text" id="ig-answer" value="${escapeHtml(existing?.answer || '')}" placeholder="Was ist auf dem Bild?">
+            </div>
+        `;
+        const imgSlot = makeSingleImageSlot(
+            container.querySelector('#ig-img'),
+            existing?.imageMediaId ? { mediaId: existing.imageMediaId } : null
+        );
+        const expl = appendExplanationFields(container, existing);
+        return {
+            async collect() {
+                const answer = container.querySelector('#ig-answer').value.trim();
+                if (!answer) { alert('Antwort erforderlich.'); return null; }
+                if (!imgSlot.get()) { alert('Bild erforderlich.'); return null; }
+                const imageMediaId = await persistSlot(imgSlot.get());
+                return { answer, imageMediaId, ...(await expl.collect()) };
             }
         };
     }
@@ -752,6 +881,7 @@ const SetupManager = (function () {
             });
         }
         renderSlots();
+        const expl = appendExplanationFields(container, existing);
 
         return {
             async collect() {
@@ -770,6 +900,7 @@ const SetupManager = (function () {
                         container.querySelector('#wa-hint-2').value.trim(),
                     ],
                     answer,
+                    ...(await expl.collect()),
                 };
             }
         };
@@ -899,6 +1030,7 @@ const SetupManager = (function () {
             });
         }
         renderOptions();
+        const expl = appendExplanationFields(container, existing);
 
         return {
             async collect() {
@@ -919,6 +1051,7 @@ const SetupManager = (function () {
                     imageMediaId,
                     options: options.slice(),
                     correctIndex,
+                    ...(await expl.collect()),
                 };
             }
         };
@@ -991,6 +1124,7 @@ const SetupManager = (function () {
                 refreshPrev();
             }
         });
+        const expl = appendExplanationFields(container, existing);
 
         return {
             async collect() {
@@ -1009,6 +1143,7 @@ const SetupManager = (function () {
                     startAt,
                     stopAt,
                     answer,
+                    ...(await expl.collect()),
                 };
             }
         };
