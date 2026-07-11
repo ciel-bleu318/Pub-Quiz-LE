@@ -5,6 +5,7 @@
 
 const MainBoard = (function () {
     let root;
+    let scoreEditMode = false;  // toggles the per-team +/- controls
 
     // Color rotation for category tiles (Moebius palette)
     const TILE_PALETTE = [
@@ -142,28 +143,34 @@ const MainBoard = (function () {
         ranked.forEach((team, idx) => {
             const av = state.avatars.find(a => a.id === team.avatarId);
             const row = document.createElement('div');
-            row.className = 'score-row';
+            row.className = 'score-row' + (scoreEditMode ? ' editing' : '');
             if (idx === 0 && team.score > 0) row.classList.add('leader');
 
+            // The +/- controls only appear in edit mode.
+            const adjust = scoreEditMode
+                ? `<div class="score-adjust">
+                        <button class="score-btn score-minus" title="Punkt abziehen">–</button>
+                        <div class="score-points">${team.score}</div>
+                        <button class="score-btn score-plus" title="Punkt hinzufügen">+</button>
+                   </div>`
+                : `<div class="score-points">${team.score}</div>`;
             row.innerHTML = `
                 <div class="score-rank">${String(idx + 1).padStart(2, '0')}</div>
                 <div class="score-avatar">${av ? '' : '?'}</div>
                 <div class="score-name">${escapeHtml(team.name)}</div>
-                <div class="score-adjust">
-                    <button class="score-btn score-minus" title="Punkt abziehen">–</button>
-                    <div class="score-points">${team.score}</div>
-                    <button class="score-btn score-plus" title="Punkt hinzufügen">+</button>
-                </div>
+                ${adjust}
             `;
             if (av) MediaCache.applyBg(row.querySelector('.score-avatar'), av.mediaId);
-            row.querySelector('.score-minus').addEventListener('click', () => {
-                GameState.adjustTeamScore(team.id, -1);
-                render();
-            });
-            row.querySelector('.score-plus').addEventListener('click', () => {
-                GameState.adjustTeamScore(team.id, +1);
-                render();
-            });
+            if (scoreEditMode) {
+                row.querySelector('.score-minus').addEventListener('click', () => {
+                    GameState.adjustTeamScore(team.id, -1);
+                    render();
+                });
+                row.querySelector('.score-plus').addEventListener('click', () => {
+                    GameState.adjustTeamScore(team.id, +1);
+                    render();
+                });
+            }
             list.appendChild(row);
         });
 
@@ -190,6 +197,16 @@ const MainBoard = (function () {
             `;
             side.appendChild(footer);
         }
+
+        // Small bottom-right toggle to reveal/hide the per-team +/- controls.
+        const editToggle = document.createElement('button');
+        editToggle.className = 'score-edit-toggle' + (scoreEditMode ? ' active' : '');
+        editToggle.textContent = scoreEditMode ? '✓ FERTIG' : 'Punktestand editieren';
+        editToggle.addEventListener('click', () => {
+            scoreEditMode = !scoreEditMode;
+            render();
+        });
+        side.appendChild(editToggle);
 
         return side;
     }

@@ -2289,3 +2289,27 @@ body {
 }
 .score-btn:hover { color: var(--gold); border-color: var(--gold); box-shadow: var(--glow-gold); }
 .score-adjust .score-points { min-width: 30px; text-align: center; }
+
+/* Score-edit toggle — small, bottom-right of the scoreboard */
+.score-edit-toggle {
+    align-self: flex-end;
+    margin-top: 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-faint);
+    font-family: var(--font-body);
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    padding: 4px 2px;
+    transition: color 0.15s ease;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+}
+.score-edit-toggle:hover { color: var(--gold); }
+.score-edit-toggle.active {
+    color: var(--gold);
+    text-decoration: none;
+    font-family: var(--font-display);
+    letter-spacing: 2px;
+}
